@@ -178,6 +178,7 @@
     draft: { editingId: null, front: "", back: "", tags: [], newTag: "", audioMode: "system", recState: "idle", recSec: 0, recording: null },
     profileDraft: { name: "", photo: null },
     activityRange: "year", // "year" | "30d" | "7d"
+    tagsEditMode: false,
     session: null, // { queue: [ids], qi, flipped, tags, results }
   };
 
@@ -530,6 +531,27 @@
     render();
   }
 
+  // Deleting a tag removes it from every card that has it (tags aren't a
+  // separate registry — they're just whatever's on data.cards). A card left
+  // with none falls back to UNTAGGED_TAG so it's never truly tag-less.
+  function deleteTag(tag) {
+    if (tag === UNTAGGED_TAG) return;
+    const count = data.cards.filter((c) => c.tags.includes(tag)).length;
+    const msg = 'Delete "' + tag + '"? It will be removed from ' + count + " card" + (count === 1 ? "" : "s")
+      + (count ? '. Any left with no tags will be marked "' + UNTAGGED_TAG + '".' : ".");
+    if (!confirm(msg)) return;
+    data.cards.forEach((c) => {
+      if (c.tags.includes(tag)) {
+        c.tags = c.tags.filter((x) => x !== tag);
+        if (!c.tags.length) c.tags = [UNTAGGED_TAG];
+      }
+    });
+    ui.sel = ui.sel.filter((x) => x !== tag);
+    if (ui.filter === tag) ui.filter = "All";
+    saveData();
+    render();
+  }
+
   function toggleDraftTag(t) {
     const d = ui.draft;
     d.tags = d.tags.includes(t) ? d.tags.filter((x) => x !== t) : d.tags.concat(t);
@@ -570,9 +592,25 @@
     go(wasEditing ? "browse" : "home");
   }
 
+  function deleteCard() {
+    const id = ui.draft.editingId;
+    if (!id) return;
+    const card = data.cards.find((c) => c.id === id);
+    if (!card) return;
+    if (!confirm('Delete this card? "' + card.front + '" — this can\'t be undone.')) return;
+    data.cards = data.cards.filter((c) => c.id !== id);
+    saveData();
+    ui.draft = blankDraft();
+    ui.screen = "browse";
+    ui.filter = "All";
+    ui.query = "";
+    render();
+  }
+
   function saveCard() {
     const d = ui.draft;
-    if (!d.front.trim() || !d.back.trim() || !d.tags.length) return;
+    if (!d.front.trim() || !d.back.trim()) return;
+    const tags = d.tags.length ? d.tags.slice() : [UNTAGGED_TAG];
     const audio = d.audioMode === "system"
       ? { type: "system" }
       : d.recording
@@ -584,7 +622,7 @@
       if (card) {
         card.front = d.front.trim();
         card.back = d.back.trim();
-        card.tags = d.tags.slice();
+        card.tags = tags;
         card.audio = audio;
       }
     } else {
@@ -593,7 +631,7 @@
         front: d.front.trim(),
         romaji: "",
         back: d.back.trim(),
-        tags: d.tags.slice(),
+        tags: tags,
         stability: null,
         difficulty: null,
         reps: 0,
@@ -877,20 +915,37 @@
         "div",
         { style: { display: "flex", alignItems: "center", gap: "10px", padding: "8px 20px 0" } },
         h("div", { class: "tap", style: { width: "34px", height: "34px", borderRadius: "10px", background: "#faf9f5", border: "1px solid #f0eee6", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: () => go("home") }, icon('<path d="M19 12H5M12 19l-7-7 7-7"/>', 16, "#141413")),
-        h("div", { style: { fontSize: "13px", color: "#5e5d59" } }, "Step 1 of 2")
+        h("div", { style: { fontSize: "13px", color: "#5e5d59" } }, ui.tagsEditMode ? "Manage tags" : "Step 1 of 2"),
+        h("div", { style: { flex: "1" } }),
+        h("div", { class: "tap", style: { fontSize: "13px", color: "#c96442" }, onclick: () => { ui.tagsEditMode = !ui.tagsEditMode; render(); } }, ui.tagsEditMode ? "Done" : "Edit tags")
       ),
 
       h(
         "div",
         { style: { padding: "18px 20px 0" } },
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", lineHeight: "1.15", color: "#141413" } }, "Which tags today?"),
-        h("div", { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } }, "Pick one or several. Only cards that are due in those tags enter the session.")
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", lineHeight: "1.15", color: "#141413" } }, ui.tagsEditMode ? "Manage your tags." : "Which tags today?"),
+        h(
+          "div",
+          { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } },
+          ui.tagsEditMode ? 'Tap × to delete a tag from every card. Cards left with none are marked "' + UNTAGGED_TAG + '".' : "Pick one or several. Only cards that are due in those tags enter the session."
+        )
       ),
 
       h(
         "div",
         { style: { margin: "20px 20px 0", display: "flex", flexWrap: "wrap", gap: "9px" } },
         ...tags.map((t) => {
+          if (ui.tagsEditMode) {
+            const deletable = t !== UNTAGGED_TAG;
+            return h(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "9px", padding: "11px 12px 11px 15px", borderRadius: "9999px", background: "#faf9f5", border: "1px solid #f0eee6" } },
+              h("span", { style: { fontSize: "14px", color: "#141413" } }, t),
+              deletable
+                ? h("div", { class: "tap", style: { width: "20px", height: "20px", borderRadius: "9999px", background: "#f0eee6", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: () => deleteTag(t) }, icon('<path d="M18 6L6 18M6 6l12 12"/>', 11, "#c96442"))
+                : h("span", { style: { fontSize: "10.5px", color: "#b0aea5" } }, "default")
+            );
+          }
           const on = ui.sel.includes(t);
           return h(
             "div",
@@ -901,7 +956,7 @@
         })
       ),
 
-      h(
+      ui.tagsEditMode ? null : h(
         "div",
         { style: { margin: "24px 20px 0", padding: "16px 18px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px" } },
         h(
@@ -915,7 +970,7 @@
 
       h("div", { style: { flex: "1" } }),
 
-      h(
+      ui.tagsEditMode ? null : h(
         "div",
         { style: { position: "sticky", bottom: "0", padding: "14px 20px calc(env(safe-area-inset-bottom, 0px) + 22px)", background: "rgba(245,244,237,.94)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", borderTop: "1px solid #f0eee6" } },
         n
@@ -1061,6 +1116,7 @@
     );
   }
 
+  const UNTAGGED_TAG = "Untagged"; // automatic fallback so a card is never left with zero tags
   const RECENT_TAG = "Recently added";
   const RECENT_MS = 7 * 86400000;
 
@@ -1140,7 +1196,7 @@
   function screenAdd() {
     const d = ui.draft;
     const tags = allTags();
-    const canSave = d.front.trim() && d.back.trim() && d.tags.length;
+    const canSave = d.front.trim() && d.back.trim();
 
     const audioModePanel = d.audioMode === "system"
       ? h(
@@ -1215,8 +1271,8 @@
         h(
           "div",
           { style: { display: "flex", alignItems: "baseline", justifyContent: "space-between" } },
-          h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Tags · required"),
-          h("div", { style: { fontSize: "11.5px", color: "#b0aea5" } }, d.tags.length ? d.tags.length + " selected" : "pick at least one")
+          h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Tags · optional"),
+          h("div", { style: { fontSize: "11.5px", color: "#b0aea5" } }, d.tags.length ? d.tags.length + " selected" : 'defaults to "' + UNTAGGED_TAG + '"')
         ),
         h(
           "div",
@@ -1258,6 +1314,15 @@
       ),
 
       h("div", { style: { padding: "20px 20px 0", fontSize: "12px", lineHeight: "1.7", color: "#b0aea5" } }, "Audio plays automatically when the card appears in review. Generated audio is read from the front of the card — record your own voice instead when pronunciation or intonation is the thing you want to practise."),
+
+      d.editingId
+        ? h(
+            "div",
+            { style: { padding: "26px 20px 0" } },
+            h("div", { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", border: "1px solid #f0eee6", color: "#c96442", fontSize: "14px", fontWeight: "500" }, onclick: deleteCard }, "Delete card")
+          )
+        : null,
+
       h("div", { style: { height: "40px" } })
     );
   }

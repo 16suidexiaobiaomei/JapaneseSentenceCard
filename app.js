@@ -241,15 +241,6 @@
     return best;
   }
 
-  function reviewsInRange(from, to) {
-    let total = 0;
-    for (const [key, count] of Object.entries(data.reviewLog)) {
-      const d = new Date(key + "T00:00:00");
-      if (d >= from && d <= to) total += count;
-    }
-    return total;
-  }
-
   // Activity range toggle: "year" | "30d" | "7d" — how many days back each covers.
   const ACTIVITY_RANGE_DAYS = { year: 370, "30d": 29, "7d": 6 };
 
@@ -260,8 +251,11 @@
     return from;
   }
 
-  function reviewsInLastDays(daysBack) {
-    return reviewsInRange(rangeStart(daysBack), new Date());
+  // Distinct cards reviewed at least once in the window — a card graded
+  // several times (retries, practice) still only counts once.
+  function cardsReviewedInLastDays(daysBack) {
+    const from = rangeStart(daysBack).getTime();
+    return data.cards.filter((c) => c.lastReviewAt && c.lastReviewAt >= from).length;
   }
 
   function activeDaysInLastDays(daysBack) {
@@ -867,7 +861,7 @@
           "div",
           { style: { marginTop: "14px", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" } },
           statTile("Cards", String(data.cards.length)),
-          statTile("Reviewed", String(reviewsInLastDays(rangeDays))),
+          statTile("Reviewed", String(cardsReviewedInLastDays(rangeDays))),
           statTile("Active days", String(activeDaysInLastDays(rangeDays))),
           statTile("Current streak", streakDays() + "d"),
           statTile("Longest streak", longestStreak() + "d"),
@@ -1047,7 +1041,17 @@
           { class: "anim-in", style: { display: "flex", flexDirection: "column", height: "100%" } },
           h("div", { style: { fontFamily: "var(--jp)", fontSize: "16px", lineHeight: "1.5", color: "#5e5d59", paddingBottom: "18px", borderBottom: "1px solid #f0eee6" } }, c.front),
           h("div", { style: { flex: "1", display: "flex", alignItems: "center" } }, h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", lineHeight: "1.35", color: "#141413" } }, c.back)),
-          h("div", { style: { fontSize: "11.5px", color: "#b0aea5" } }, "Reviewed " + c.reps + " times · next review in " + gap)
+          h(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
+            h(
+              "div",
+              { class: "tap", style: { display: "flex", alignItems: "center", gap: "11px", padding: "10px 16px 10px 12px", borderRadius: "9999px", background: "#f5f4ed", border: "1px solid #f0eee6" }, onclick: () => playCardAudio(c) },
+              icon('<path d="M8 5l11 7-11 7z"/>', 16, "#c96442"),
+              h("span", { style: { fontSize: "11.5px", color: "#5e5d59" } }, c.audio && c.audio.type === "voice" ? "your voice" : "play audio")
+            ),
+            h("div", { style: { fontSize: "11.5px", color: "#b0aea5" } }, "Reviewed " + c.reps + " · next in " + gap)
+          )
         )
       );
     }

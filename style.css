@@ -1,0 +1,102 @@
+:root {
+  --cream: #eae7dd;
+  --home-bg: #f5f4ed;
+  --card-bg: #faf9f5;
+  --border: #f0eee6;
+  --border-2: #e6e3d8;
+  --dash: #ddd8c8;
+  --dark: #141413;
+  --dark-2: #1a1a18;
+  --accent: #c96442;
+  --accent-2: #d97757;
+  --muted: #5e5d59;
+  --muted-2: #b0aea5;
+  --dot-3: #8a8778;
+  --focus: #3898ec;
+  --serif: 'Source Serif 4', Georgia, serif;
+  --jp: 'Noto Serif JP', serif;
+  --sans: Geist, system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--cream);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  height: 100%;
+}
+
+body { min-height: 100dvh; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--dark); }
+
+input, textarea, button { font-family: inherit; }
+
+button { border: none; background: none; padding: 0; font: inherit; cursor: pointer; }
+
+textarea:focus, input:focus { outline: none; border-color: var(--focus) !important; }
+
+::placeholder { color: var(--muted-2); }
+
+#app {
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Fixed-length app frame: the frame itself never grows or shrinks with
+   content. Content scrolls INSIDE it (this element is the scroll
+   container), so a bottom nav/CTA pinned inside a screen (position:
+   sticky; bottom: 0) always sits at the true bottom of the frame,
+   whether the screen's content is one row or fifty. */
+.phone {
+  width: 100%;
+  max-width: 480px;
+  height: 100dvh;
+  background: var(--home-bg);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 540px) {
+  #app { padding: 28px 16px; }
+  .phone { height: min(874px, calc(100dvh - 56px)); border-radius: 32px; box-shadow: 0 30px 70px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06); }
+}
+
+/* dark screens (review / done) */
+.phone.dark { background: var(--dark); }
+
+/* interactive rows/tiles */
+.tap { cursor: pointer; }
+.row-hover:hover { border-color: var(--border-2) !important; }
+.chip:hover { filter: brightness(0.98); }
+
+/* keyframes */
+@keyframes sc-rec { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@keyframes sc-wave { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+@keyframes sc-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.anim-in { animation: sc-in .22s cubic-bezier(.4,0,.2,1); }
+
+.scrollx {
+  display: flex;
+  flex-shrink: 0; /* a scroll container's auto min-size is 0, so a flex column
+                     parent under pressure will crush this to 0px height
+                     unless shrinking is disabled explicitly */
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.scrollx::-webkit-scrollbar { display: none; }
+
+.bottom-nav-item svg { display: block; }

@@ -177,6 +177,7 @@
     filter: "All",
     draft: { editingId: null, front: "", back: "", tags: [], newTag: "", audioMode: "system", recState: "idle", recSec: 0, recording: null },
     profileDraft: { name: "", photo: null },
+    activityRange: "year", // "year" | "30d" | "7d"
     session: null, // { queue: [ids], qi, flipped, tags, results }
   };
 
@@ -248,22 +249,30 @@
     return total;
   }
 
-  function reviewsThisWeek() {
-    const to = new Date();
-    const from = new Date(to);
-    from.setDate(from.getDate() - 6);
+  // Activity range toggle: "year" | "30d" | "7d" — how many days back each covers.
+  const ACTIVITY_RANGE_DAYS = { year: 370, "30d": 29, "7d": 6 };
+
+  function rangeStart(daysBack) {
+    const from = new Date();
+    from.setDate(from.getDate() - daysBack);
     from.setHours(0, 0, 0, 0);
-    return reviewsInRange(from, to);
+    return from;
   }
 
-  function reviewsThisMonth() {
-    const now = new Date();
-    return reviewsInRange(new Date(now.getFullYear(), now.getMonth(), 1), now);
+  function reviewsInLastDays(daysBack) {
+    return reviewsInRange(rangeStart(daysBack), new Date());
   }
 
-  function reviewsThisYear() {
-    const now = new Date();
-    return reviewsInRange(new Date(now.getFullYear(), 0, 1), now);
+  function activeDaysInLastDays(daysBack) {
+    const from = rangeStart(daysBack);
+    const to = new Date();
+    let n = 0;
+    for (const [key, count] of Object.entries(data.reviewLog)) {
+      if (count <= 0) continue;
+      const d = new Date(key + "T00:00:00");
+      if (d >= from && d <= to) n++;
+    }
+    return n;
   }
 
   function formatDuration(ms) {
@@ -274,12 +283,13 @@
     return h + "h " + m + "m";
   }
 
-  // A GitHub-style year of weeks, aligned to full Sun-Sat columns, ending today.
-  function yearHeatmapWeeks() {
+  // A GitHub-style grid of weeks (Sun-Sat columns) covering the last `daysBack`
+  // days, ending today.
+  function heatmapWeeks(daysBack) {
     const end = new Date();
     end.setHours(0, 0, 0, 0);
     const start = new Date(end);
-    start.setDate(start.getDate() - 370);
+    start.setDate(start.getDate() - daysBack);
     start.setDate(start.getDate() - start.getDay());
     const weeks = [];
     let d = new Date(start);
@@ -702,7 +712,7 @@
   function statTile(label, value) {
     return h(
       "div",
-      { style: { background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "12px", padding: "13px 14px" } },
+      { style: { background: "#f5f4ed", borderRadius: "12px", padding: "13px 14px" } },
       h("div", { style: { fontSize: "10.5px", letterSpacing: ".05em", textTransform: "uppercase", color: "#b0aea5" } }, label),
       h("div", { style: { marginTop: "6px", fontFamily: "var(--serif)", fontSize: "19px", color: "#141413" } }, value)
     );
@@ -711,10 +721,9 @@
   function screenHome() {
     const tags = allTags();
     const due = dueCards(null);
-    const recent = data.cards.slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
-    const weeks = yearHeatmapWeeks();
-    const allCounts = weeks.flat().filter(Boolean).map((c) => c.count);
-    const maxCount = Math.max(1, ...allCounts);
+    const rangeDays = ACTIVITY_RANGE_DAYS[ui.activityRange];
+    const weeks = heatmapWeeks(ACTIVITY_RANGE_DAYS.year); // heatmap always shows the full year; only the tiles respect the range toggle
+    const maxCount = Math.max(1, ...weeks.flat().filter(Boolean).map((c) => c.count));
 
     const dueLine = due.length
       ? due.length + " cards are due across " + tags.filter((t) => dueCards([t]).length).length + " tags. Sessions run " + SESSION_SIZE + " cards at a time."
@@ -794,26 +803,42 @@
           : null
       ),
 
-      h("div", { style: { margin: "24px 20px 0", fontFamily: "var(--serif)", fontSize: "17px", color: "#141413" } }, "Activity"),
-
       h(
         "div",
-        { style: { margin: "12px 20px 0", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" } },
-        statTile("Cards", String(data.cards.length)),
-        statTile("This week", String(reviewsThisWeek())),
-        statTile("This month", String(reviewsThisMonth())),
-        statTile("This year", String(reviewsThisYear())),
-        statTile("Longest streak", longestStreak() + "d"),
-        statTile("Time in app", formatDuration(data.totalActiveMs))
-      ),
+        { style: { margin: "24px 20px 0", padding: "18px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "18px" } },
 
-      h(
-        "div",
-        { style: { margin: "14px 20px 0", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px" } },
-        h("div", { style: { fontSize: "13px", fontWeight: "500", color: "#141413" } }, "Past year"),
         h(
           "div",
-          { class: "scrollx", "data-remember-scroll": "home-heatmap", "data-scroll-to-end": "true", style: { marginTop: "12px", alignItems: "flex-start" } },
+          { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+          h("div", { style: { fontFamily: "var(--serif)", fontSize: "17px", color: "#141413" } }, "Activity"),
+          h(
+            "div",
+            { style: { display: "flex", gap: "4px", background: "#f0eee6", padding: "3px", borderRadius: "9999px" } },
+            ...[["year", "All"], ["30d", "30d"], ["7d", "7d"]].map(([key, label]) => {
+              const on = ui.activityRange === key;
+              return h(
+                "div",
+                { class: "tap", style: { padding: "5px 11px", borderRadius: "9999px", fontSize: "12px", fontWeight: on ? "600" : "400", background: on ? "#141413" : "transparent", color: on ? "#faf9f5" : "#5e5d59" }, onclick: () => { ui.activityRange = key; render(); } },
+                label
+              );
+            })
+          )
+        ),
+
+        h(
+          "div",
+          { style: { marginTop: "14px", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" } },
+          statTile("Cards", String(data.cards.length)),
+          statTile("Reviewed", String(reviewsInLastDays(rangeDays))),
+          statTile("Active days", String(activeDaysInLastDays(rangeDays))),
+          statTile("Current streak", streakDays() + "d"),
+          statTile("Longest streak", longestStreak() + "d"),
+          statTile("Time in app", formatDuration(data.totalActiveMs))
+        ),
+
+        h(
+          "div",
+          { class: "scrollx", "data-remember-scroll": "home-heatmap", "data-scroll-to-end": "true", style: { marginTop: "16px", alignItems: "flex-start" } },
           ...weeks.map((week) =>
             h(
               "div",
@@ -831,19 +856,6 @@
         )
       ),
 
-      h("div", { style: { margin: "26px 20px 0", fontFamily: "var(--serif)", fontSize: "17px", color: "#141413" } }, "Recently added"),
-      h(
-        "div",
-        { style: { margin: "12px 20px 0", display: "flex", flexDirection: "column", gap: "1px", background: "#f0eee6", border: "1px solid #f0eee6", borderRadius: "12px", overflow: "hidden" } },
-        ...recent.map((c) =>
-          h(
-            "div",
-            { style: { padding: "13px 16px", background: "#faf9f5" } },
-            h("div", { style: { fontFamily: "var(--jp)", fontSize: "15px", color: "#141413" } }, c.front),
-            h("div", { style: { marginTop: "4px", fontSize: "12px", color: "#5e5d59" } }, c.back)
-          )
-        )
-      ),
       h("div", { style: { height: "24px" } }),
 
       bottomNav("home")
@@ -1034,7 +1046,7 @@
       h("div", { style: { marginTop: "10px", fontSize: "14px", lineHeight: "1.6", color: "#b0aea5" } }, s.queue.length + " cards reviewed from " + s.tags.join(" · ") + "."),
       h(
         "div",
-        { style: { marginTop: "30px", display: "flex", flexDirection: "column", gap: "1px", background: "rgba(250,249,245,.1)", borderRadius: "16px", overflow: "hidden" } },
+        { style: { marginTop: "30px", display: "flex", flexShrink: "0", flexDirection: "column", gap: "1px", background: "rgba(250,249,245,.1)", borderRadius: "16px", overflow: "hidden" } },
         h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", background: "#1a1a18" } }, h("span", { style: { fontSize: "13.5px", color: "#b0aea5" } }, "Didn't remember"), h("span", { style: { fontFamily: "var(--serif)", fontSize: "19px", color: "#d97757" } }, String(s.results.again))),
         h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", background: "#1a1a18" } }, h("span", { style: { fontSize: "13.5px", color: "#b0aea5" } }, "Remembered"), h("span", { style: { fontFamily: "var(--serif)", fontSize: "19px", color: "#faf9f5" } }, String(s.results.good)))
       ),
@@ -1049,23 +1061,28 @@
     );
   }
 
+  const RECENT_TAG = "Recently added";
+  const RECENT_MS = 7 * 86400000;
+
   function screenBrowse() {
     const tags = allTags();
     const q = ui.query.trim().toLowerCase();
     const list = data.cards.filter((x) => {
       const okQ = !q || x.front.toLowerCase().includes(q) || x.back.toLowerCase().includes(q) || x.tags.join(" ").toLowerCase().includes(q);
-      return okQ && (ui.filter === "All" || x.tags.includes(ui.filter));
+      const okFilter = ui.filter === "All"
+        || (ui.filter === RECENT_TAG ? Date.now() - x.createdAt <= RECENT_MS : x.tags.includes(ui.filter));
+      return okQ && okFilter;
     });
 
     return h(
       "div",
       { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
 
-      h("div", { style: { padding: "8px 20px 0", fontFamily: "var(--serif)", fontSize: "28px", color: "#141413" } }, "All cards"),
+      h("div", { style: { padding: "8px 20px 0", fontFamily: "var(--serif)", fontSize: "28px", color: "#141413" } }, "Cards"),
 
       h(
         "div",
-        { style: { margin: "16px 20px 0", display: "flex", alignItems: "center", gap: "10px", padding: "11px 14px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "12px" } },
+        { style: { margin: "14px 20px 0", display: "flex", alignItems: "center", gap: "10px", padding: "11px 14px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "12px" } },
         icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.5-4.5"/>', 15, "#b0aea5"),
         h("input", { "data-field": "query", value: ui.query, placeholder: "Search sentence, note or tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14px", color: "#141413" }, oninput: (e) => { ui.query = e.target.value; render(); } })
       ),
@@ -1073,7 +1090,7 @@
       h(
         "div",
         { class: "scrollx", "data-remember-scroll": "browse-filters", style: { margin: "14px 0 0", padding: "0 20px" } },
-        ...["All"].concat(tags).map((f) => {
+        ...["All", RECENT_TAG].concat(tags).map((f) => {
           const on = ui.filter === f;
           return h("div", { class: "tap chip", style: Object.assign({ padding: "8px 14px", borderRadius: "9999px", fontSize: "12.5px", whiteSpace: "nowrap" }, chipStyle(on)), onclick: () => { ui.filter = f; render(); } }, f);
         })
@@ -1107,8 +1124,7 @@
               ...c.tags.map((t) => h("div", { style: { padding: "4px 9px", borderRadius: "9999px", background: "#f0eee6", color: "#5e5d59", fontSize: "10.5px" } }, t)),
               h(
                 "div",
-                { style: { marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" } },
-                h("span", { style: { fontSize: "10.5px", color: "#b0aea5" } }, c.audio ? (c.audio.type === "voice" ? "your voice" : "generated") : ""),
+                { style: { marginLeft: "auto" } },
                 h("span", { style: { fontSize: "10.5px", color: c.dueAt <= Date.now() ? "#c96442" : "#b0aea5" } }, dueLabel(c))
               )
             )

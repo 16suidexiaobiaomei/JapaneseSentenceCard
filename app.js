@@ -6,15 +6,76 @@
   "use strict";
 
   const STORAGE_KEY = "sentence-cards-v1";
-
-  // box index -> interval in days for a "Good" grade landing on that box.
-  // box 0 is only reached via "Again" and is handled as a short 10-minute relearn step.
-  const INTERVAL_DAYS = [0, 1, 3, 7, 21, 60];
-  const INTERVAL_LABELS = ["10 min", "1 day", "3 days", "1 week", "3 weeks", "2 months"];
-  const AGAIN_DELAY_MS = 10 * 60 * 1000;
-  const DOT_COLORS = ["#c96442", "#d97757", "#5e5d59", "#141413", "#b0aea5", "#8a8778"];
   const SESSION_SIZE = 10;
   const AUTOPLAY_AUDIO = true;
+
+  // ---------------------------------------------------------------------
+  // FSRS (Free Spaced Repetition Scheduler) — v4.5 formulas & default weights.
+  //
+  // The retrievability/difficulty/stability formulas below are the exact
+  // published FSRS-4.5 equations. FSRS_DECAY/FSRS_FACTOR aren't arbitrary:
+  // "stability" is DEFINED as the number of days for recall probability to
+  // fall to 90%, i.e. R(t=S) = 0.9 — solving (1+FACTOR)^DECAY = 0.9 for
+  // FACTOR with DECAY=-0.5 gives exactly 19/81, so the two are self-consistent.
+  //
+  // FSRS_W is the published *default* parameter set — good out of the box,
+  // but a real FSRS deployment additionally *optimizes* these 19 weights
+  // per-user from that user's review history (via the separate FSRS
+  // optimizer, normally run offline on hundreds+ of reviews). This app
+  // does not do that optimization step, so scheduling here uses the same
+  // memory model FSRS uses, but generic (non-personalized) weights.
+  // ---------------------------------------------------------------------
+  const FSRS_DECAY = -0.5;
+  const FSRS_FACTOR = 19 / 81;
+  const FSRS_W = [
+    0.4197, 1.1869, 3.0412, 15.2441, 7.1434, 0.6477, 1.0007, 0.0674,
+    1.6597, 0.1712, 1.1178, 2.0225, 0.0904, 0.3025, 2.1214, 0.2498,
+    2.9466, 0.4891, 0.6468,
+  ];
+  const DESIRED_RETENTION = 0.9; // schedule so recall probability is ~90% at the due date
+  const AGAIN_RELEARN_MS = 10 * 60 * 1000; // short-term relearn step after "Didn't remember"
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  // Probability of recall after `elapsedDays` given current `stability`.
+  function fsrsRetrievability(elapsedDays, stability) {
+    if (!stability || stability <= 0) return 0;
+    return Math.pow(1 + (FSRS_FACTOR * elapsedDays) / stability, FSRS_DECAY);
+  }
+
+  // rating: 1 = Again, 3 = Good (this app's 2-choice UI only ever uses these two)
+  function fsrsInitStability(rating) {
+    return Math.max(0.1, FSRS_W[rating - 1]);
+  }
+
+  function fsrsInitDifficulty(rating) {
+    return clamp(FSRS_W[4] - (rating - 3) * FSRS_W[5], 1, 10);
+  }
+
+  function fsrsNextDifficulty(prevDifficulty, rating) {
+    const d = prevDifficulty - FSRS_W[6] * (rating - 3);
+    const reverted = FSRS_W[7] * fsrsInitDifficulty(4) + (1 - FSRS_W[7]) * d;
+    return clamp(reverted, 1, 10);
+  }
+
+  function fsrsNextStabilityOnRecall(difficulty, stability, retrievability, rating) {
+    const hardPenalty = rating === 2 ? FSRS_W[15] : 1;
+    const easyBonus = rating === 4 ? FSRS_W[16] : 1;
+    const inc = 1 + Math.exp(FSRS_W[8]) * (11 - difficulty) * Math.pow(stability, -FSRS_W[9]) *
+      (Math.exp((1 - retrievability) * FSRS_W[10]) - 1) * hardPenalty * easyBonus;
+    return stability * inc;
+  }
+
+  function fsrsNextStabilityOnLapse(difficulty, stability, retrievability) {
+    const s = FSRS_W[11] * Math.pow(difficulty, -FSRS_W[12]) *
+      (Math.pow(stability + 1, FSRS_W[13]) - 1) * Math.exp((1 - retrievability) * FSRS_W[14]);
+    return Math.min(s, stability); // a lapse should never increase stability
+  }
+
+  // Days until recall probability decays to `retention`, given `stability`.
+  function fsrsIntervalDays(stability, retention) {
+    return (stability / FSRS_FACTOR) * (Math.pow(retention, 1 / FSRS_DECAY) - 1);
+  }
 
   const SEED_CARDS = [
     ["昨日は泳ぎました。", "Kinō wa oyogimashita.", "I swam yesterday.", ["Past tense", "Daily life"]],
@@ -44,14 +105,18 @@
         romaji: c[1],
         back: c[2],
         tags: c[3],
-        box: 0,
+        stability: null, // null until first reviewed — FSRS memory state
+        difficulty: null,
+        reps: 0,
+        lapses: 0,
+        lastReviewAt: null,
         dueAt: now,
         audio: { type: "system" },
-        seen: 0,
         createdAt: now - (SEED_CARDS.length - i) * 1000,
       })),
       reviewLog: {}, // "YYYY-MM-DD" -> count
       profile: { name: "", photo: null },
+      totalActiveMs: 0,
     };
   }
 
@@ -63,6 +128,16 @@
       if (!parsed || !Array.isArray(parsed.cards)) return makeSeedData();
       if (!parsed.reviewLog) parsed.reviewLog = {};
       if (!parsed.profile) parsed.profile = { name: "", photo: null };
+      if (typeof parsed.totalActiveMs !== "number") parsed.totalActiveMs = 0;
+      parsed.cards.forEach((c) => {
+        if (c.stability === undefined) c.stability = null;
+        if (c.difficulty === undefined) c.difficulty = null;
+        if (c.reps === undefined) c.reps = c.seen || 0;
+        if (c.lapses === undefined) c.lapses = 0;
+        if (c.lastReviewAt === undefined) c.lastReviewAt = null;
+        delete c.box;
+        delete c.seen;
+      });
       return parsed;
     } catch {
       return makeSeedData();
@@ -78,6 +153,21 @@
       console.warn("Could not save to localStorage", e);
     }
   }
+
+  // Tracks cumulative time the app has been open and visible, for the
+  // "Time in app" stat. Approximate (foreground time only), not billing-grade.
+  (function trackActiveTime() {
+    let lastTick = Date.now();
+    setInterval(() => {
+      const now = Date.now();
+      const delta = now - lastTick;
+      lastTick = now;
+      if (document.visibilityState === "visible" && delta > 0 && delta < 60000) {
+        data.totalActiveMs += delta;
+        saveData();
+      }
+    }, 15000);
+  })();
 
   // Transient (not persisted) UI/session state
   let ui = {
@@ -117,10 +207,6 @@
     return data.cards.filter((c) => isDue(c, now) && (!tags || !tags.length || c.tags.some((t) => tags.includes(t))));
   }
 
-  function totalCards(tag) {
-    return data.cards.filter((c) => !tag || c.tags.includes(tag)).length;
-  }
-
   function allTags() {
     const s = [];
     data.cards.forEach((c) => c.tags.forEach((t) => { if (!s.includes(t)) s.push(t); }));
@@ -139,17 +225,85 @@
     return count;
   }
 
-  function weekData() {
-    const log = data.reviewLog;
-    const names = ["S", "M", "T", "W", "T", "F", "S"];
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      days.push({ name: names[d.getDay()], count: log[dateKey(d)] || 0 });
+  function longestStreak() {
+    const dates = Object.keys(data.reviewLog).filter((k) => data.reviewLog[k] > 0).sort();
+    if (!dates.length) return 0;
+    let best = 1, cur = 1;
+    for (let i = 1; i < dates.length; i++) {
+      const prev = new Date(dates[i - 1] + "T00:00:00");
+      const curr = new Date(dates[i] + "T00:00:00");
+      const diffDays = Math.round((curr - prev) / 86400000);
+      cur = diffDays === 1 ? cur + 1 : 1;
+      best = Math.max(best, cur);
     }
-    return days;
+    return best;
   }
+
+  function reviewsInRange(from, to) {
+    let total = 0;
+    for (const [key, count] of Object.entries(data.reviewLog)) {
+      const d = new Date(key + "T00:00:00");
+      if (d >= from && d <= to) total += count;
+    }
+    return total;
+  }
+
+  function reviewsThisWeek() {
+    const to = new Date();
+    const from = new Date(to);
+    from.setDate(from.getDate() - 6);
+    from.setHours(0, 0, 0, 0);
+    return reviewsInRange(from, to);
+  }
+
+  function reviewsThisMonth() {
+    const now = new Date();
+    return reviewsInRange(new Date(now.getFullYear(), now.getMonth(), 1), now);
+  }
+
+  function reviewsThisYear() {
+    const now = new Date();
+    return reviewsInRange(new Date(now.getFullYear(), 0, 1), now);
+  }
+
+  function formatDuration(ms) {
+    const totalMin = Math.round(ms / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if (h <= 0) return m + "m";
+    return h + "h " + m + "m";
+  }
+
+  // A GitHub-style year of weeks, aligned to full Sun-Sat columns, ending today.
+  function yearHeatmapWeeks() {
+    const end = new Date();
+    end.setHours(0, 0, 0, 0);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 370);
+    start.setDate(start.getDate() - start.getDay());
+    const weeks = [];
+    let d = new Date(start);
+    while (d <= end) {
+      const week = [];
+      for (let dow = 0; dow < 7; dow++) {
+        week.push(d > end ? null : { count: data.reviewLog[dateKey(d)] || 0 });
+        d.setDate(d.getDate() + 1);
+      }
+      weeks.push(week);
+    }
+    return weeks;
+  }
+
+  function heatLevel(count, max) {
+    if (!count) return 0;
+    const r = count / max;
+    if (r <= 0.25) return 1;
+    if (r <= 0.5) return 2;
+    if (r <= 0.75) return 3;
+    return 4;
+  }
+
+  const HEAT_COLORS = ["#f0eee6", "#f1d7bc", "#e6a874", "#c96442", "#7a3018"];
 
   function dueLabel(card) {
     const now = Date.now();
@@ -282,10 +436,18 @@
     render();
   }
 
-  function beginSession(tags) {
-    const queue = dueCards(tags).slice(0, SESSION_SIZE).map((c) => c.id);
+  function cardsMatchingTags(tags) {
+    return data.cards.filter((c) => !tags || !tags.length || c.tags.some((t) => tags.includes(t)));
+  }
+
+  // practice=true reviews ahead of schedule: pulls from ALL matching cards
+  // (not just due ones), soonest-due-first, so answering them still runs
+  // through the normal FSRS update — this is a real review, just early.
+  function beginSession(tags, practice) {
+    const pool = practice ? cardsMatchingTags(tags) : dueCards(tags);
+    const queue = pool.slice().sort((a, b) => a.dueAt - b.dueAt).slice(0, SESSION_SIZE).map((c) => c.id);
     if (!queue.length) return;
-    ui.session = { queue, qi: 0, flipped: false, tags: tags.length ? tags : ["all tags"], results: { again: 0, good: 0, easy: 0 } };
+    ui.session = { queue, qi: 0, flipped: false, tags: tags.length ? tags : ["all tags"], results: { again: 0, good: 0 }, practice: !!practice };
     ui.screen = "review";
     render();
     if (AUTOPLAY_AUDIO) setTimeout(() => playCardAudio(currentCard()), 250);
@@ -297,38 +459,57 @@
     return data.cards.find((c) => c.id === id) || null;
   }
 
-  function flipCard() {
-    if (!ui.session) return;
-    ui.session.flipped = !ui.session.flipped;
+  // Self-graded recall, FSRS-scheduled: the user judges "did I remember
+  // this?" BEFORE the back note is revealed (so the judgment reflects real
+  // recall, not a post-hoc read of the answer). That choice both reveals
+  // the back and drives the FSRS memory-state update for this card.
+  function answerCard(remembered) {
+    const s = ui.session;
+    const c = currentCard();
+    if (!s || !c || s.flipped) return;
+
+    const rating = remembered ? 3 : 1; // FSRS rating scale: 1=Again, 3=Good
+    const now = Date.now();
+    const elapsedDays = c.lastReviewAt ? (now - c.lastReviewAt) / 86400000 : 0;
+
+    if (c.stability == null) {
+      c.stability = fsrsInitStability(rating);
+      c.difficulty = fsrsInitDifficulty(rating);
+    } else {
+      const r = fsrsRetrievability(elapsedDays, c.stability);
+      c.stability = remembered
+        ? fsrsNextStabilityOnRecall(c.difficulty, c.stability, r, rating)
+        : fsrsNextStabilityOnLapse(c.difficulty, c.stability, r);
+      c.difficulty = fsrsNextDifficulty(c.difficulty, rating);
+    }
+
+    c.lastReviewAt = now;
+    c.reps += 1;
+    if (!remembered) c.lapses += 1;
+
+    if (remembered) {
+      const days = fsrsIntervalDays(c.stability, DESIRED_RETENTION);
+      c.dueAt = now + Math.max(1, Math.round(days)) * 86400000;
+    } else {
+      c.dueAt = now + AGAIN_RELEARN_MS; // long-term stability/difficulty above are still updated
+    }
+
+    s.results[remembered ? "good" : "again"] += 1;
+    s.flipped = true;
+    logReviewToday();
+    saveData();
     render();
   }
 
-  function gradeCard(kind) {
+  function nextCard() {
     const s = ui.session;
-    const c = currentCard();
-    if (!s || !c) return;
-
-    let box, dueAt;
-    if (kind === "again") {
-      box = 0;
-      dueAt = Date.now() + AGAIN_DELAY_MS;
-    } else {
-      box = Math.min(5, c.box + (kind === "easy" ? 2 : 1));
-      dueAt = Date.now() + INTERVAL_DAYS[box] * 86400000;
-    }
-    c.box = box;
-    c.dueAt = dueAt;
-    c.seen += 1;
-    s.results[kind] += 1;
-    logReviewToday();
-    saveData();
-
+    if (!s) return;
     const last = s.qi >= s.queue.length - 1;
-    s.flipped = false;
     if (last) {
       ui.screen = "done";
     } else {
       s.qi += 1;
+      s.flipped = false;
     }
     render();
     if (!last && AUTOPLAY_AUDIO) setTimeout(() => playCardAudio(currentCard()), 250);
@@ -403,10 +584,13 @@
         romaji: "",
         back: d.back.trim(),
         tags: d.tags.slice(),
-        box: 0,
+        stability: null,
+        difficulty: null,
+        reps: 0,
+        lapses: 0,
+        lastReviewAt: null,
         dueAt: Date.now(),
         audio,
-        seen: 0,
         createdAt: Date.now(),
       });
     }
@@ -515,13 +699,22 @@
   // Screens
   // ---------------------------------------------------------------------
 
+  function statTile(label, value) {
+    return h(
+      "div",
+      { style: { background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "12px", padding: "13px 14px" } },
+      h("div", { style: { fontSize: "10.5px", letterSpacing: ".05em", textTransform: "uppercase", color: "#b0aea5" } }, label),
+      h("div", { style: { marginTop: "6px", fontFamily: "var(--serif)", fontSize: "19px", color: "#141413" } }, value)
+    );
+  }
+
   function screenHome() {
-    const now = Date.now();
     const tags = allTags();
     const due = dueCards(null);
-    const week = weekData();
-    const maxW = Math.max(1, ...week.map((w) => w.count));
     const recent = data.cards.slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+    const weeks = yearHeatmapWeeks();
+    const allCounts = weeks.flat().filter(Boolean).map((c) => c.count);
+    const maxCount = Math.max(1, ...allCounts);
 
     const dueLine = due.length
       ? due.length + " cards are due across " + tags.filter((t) => dueCards([t]).length).length + " tags. Sessions run " + SESSION_SIZE + " cards at a time."
@@ -591,56 +784,51 @@
             { class: "tap", style: { flex: "1", padding: "13px 16px", borderRadius: "12px", background: "rgba(250,249,245,.08)", border: "1px solid rgba(250,249,245,.14)", color: "#faf9f5", fontSize: "14px", fontWeight: "500", textAlign: "center" }, onclick: () => { ui.sel = []; go("tags"); } },
             "By tags"
           )
-        )
+        ),
+        !due.length && data.cards.length
+          ? h(
+              "div",
+              { class: "tap", style: { marginTop: "12px", textAlign: "center", fontSize: "12.5px", color: "#b0aea5" }, onclick: () => beginSession([], true) },
+              "Nothing due — practice anyway →"
+            )
+          : null
+      ),
+
+      h("div", { style: { margin: "24px 20px 0", fontFamily: "var(--serif)", fontSize: "17px", color: "#141413" } }, "Activity"),
+
+      h(
+        "div",
+        { style: { margin: "12px 20px 0", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" } },
+        statTile("Cards", String(data.cards.length)),
+        statTile("This week", String(reviewsThisWeek())),
+        statTile("This month", String(reviewsThisMonth())),
+        statTile("This year", String(reviewsThisYear())),
+        statTile("Longest streak", longestStreak() + "d"),
+        statTile("Time in app", formatDuration(data.totalActiveMs))
       ),
 
       h(
         "div",
-        { style: { margin: "22px 20px 0", padding: "18px 20px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px" } },
+        { style: { margin: "14px 20px 0", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px" } },
+        h("div", { style: { fontSize: "13px", fontWeight: "500", color: "#141413" } }, "Past year"),
         h(
           "div",
-          { style: { display: "flex", alignItems: "baseline", justifyContent: "space-between" } },
-          h("div", { style: { fontSize: "13px", fontWeight: "500", color: "#141413" } }, "This week"),
-          h("div", { style: { fontSize: "12px", color: "#5e5d59" } }, week.reduce((a, w) => a + w.count, 0) + " reviewed")
-        ),
-        h(
-          "div",
-          { style: { marginTop: "16px", display: "flex", alignItems: "flex-end", gap: "9px", height: "62px" } },
-          ...week.map((d) =>
+          { class: "scrollx", "data-remember-scroll": "home-heatmap", "data-scroll-to-end": "true", style: { marginTop: "12px", alignItems: "flex-start" } },
+          ...weeks.map((week) =>
             h(
               "div",
-              { style: { flex: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" } },
-              h("div", { style: { width: "100%", borderRadius: "5px", background: d.count ? "#c96442" : "#f0eee6", height: Math.round(8 + (d.count / maxW) * 42) + "px" } }),
-              h("div", { style: { fontSize: "10.5px", color: d.count ? "#5e5d59" : "#b0aea5" } }, d.name)
+              { style: { display: "flex", flexDirection: "column", gap: "3px", flexShrink: "0" } },
+              ...week.map((cell) =>
+                h("div", {
+                  style: {
+                    width: "10px", height: "10px", borderRadius: "2px",
+                    background: cell ? HEAT_COLORS[heatLevel(cell.count, maxCount)] : "transparent",
+                  },
+                })
+              )
             )
           )
         )
-      ),
-
-      h(
-        "div",
-        { style: { margin: "24px 20px 0" } },
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "17px", color: "#141413" } }, "Review by tag")
-      ),
-      h(
-        "div",
-        { style: { margin: "12px 20px 0", display: "flex", flexDirection: "column", gap: "8px" } },
-        ...tags.map((t, i) => {
-          const d = dueCards([t]).length;
-          return h(
-            "div",
-            { class: "tap row-hover", style: { display: "flex", alignItems: "center", gap: "12px", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "12px" }, onclick: () => beginSession([t]) },
-            h("div", { style: { width: "7px", height: "7px", borderRadius: "9999px", background: DOT_COLORS[i % DOT_COLORS.length] } }),
-            h(
-              "div",
-              { style: { flex: "1", minWidth: "0" } },
-              h("div", { style: { fontSize: "14px", color: "#141413" } }, t),
-              h("div", { style: { marginTop: "3px", fontSize: "11.5px", color: "#b0aea5" } }, totalCards(t) + " cards")
-            ),
-            h("div", { style: { fontSize: "12.5px", color: d ? "#c96442" : "#b0aea5" } }, d ? d + " due" : "clear"),
-            icon('<path d="M9 18l6-6-6-6"/>', 15, "#b0aea5")
-          );
-        })
       ),
 
       h("div", { style: { margin: "26px 20px 0", fontFamily: "var(--serif)", fontSize: "17px", color: "#141413" } }, "Recently added"),
@@ -667,6 +855,7 @@
     const due = dueCards(null).length;
     const selDue = dueCards(ui.sel).length;
     const n = Math.min(selDue, SESSION_SIZE);
+    const practiceN = Math.min(cardsMatchingTags(ui.sel).length, SESSION_SIZE);
 
     return h(
       "div",
@@ -717,17 +906,38 @@
       h(
         "div",
         { style: { position: "sticky", bottom: "0", padding: "14px 20px calc(env(safe-area-inset-bottom, 0px) + 22px)", background: "rgba(245,244,237,.94)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", borderTop: "1px solid #f0eee6" } },
-        h(
-          "div",
-          {
-            class: n ? "tap" : "",
-            style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: n ? "#c96442" : "#f0eee6", color: n ? "#faf9f5" : "#b0aea5" },
-            onclick: n ? () => beginSession(ui.sel) : null,
-          },
-          n ? "Review " + n + " cards" : "Nothing due in these tags"
-        )
+        n
+          ? h(
+              "div",
+              { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "#c96442", color: "#faf9f5" }, onclick: () => beginSession(ui.sel) },
+              "Review " + n + " cards"
+            )
+          : practiceN
+            ? h(
+                "div",
+                { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "#141413", color: "#faf9f5" }, onclick: () => beginSession(ui.sel, true) },
+                "Nothing due — practice " + practiceN + " anyway"
+              )
+            : h(
+                "div",
+                { style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "#f0eee6", color: "#b0aea5" } },
+                "No cards in these tags"
+              )
       )
     );
+  }
+
+  // Human-readable label for the gap between two timestamps (used to show
+  // the FSRS-computed next-review schedule right after the user answers).
+  function formatGap(ms) {
+    if (ms <= 60 * 1000) return "a minute";
+    if (ms < 60 * 60 * 1000) return Math.round(ms / 60000) + " minutes";
+    const days = Math.round(ms / 86400000);
+    if (days <= 0) return "less than a day";
+    if (days === 1) return "1 day";
+    if (days < 30) return days + " days";
+    if (days < 365) return Math.round(days / 30) + " months";
+    return (days / 365).toFixed(1) + " years";
   }
 
   function screenReview() {
@@ -737,7 +947,7 @@
 
     const flipZone = h(
       "div",
-      { class: "tap", style: { marginTop: "18px", flex: "1", background: "#faf9f5", borderRadius: "28px", padding: "34px 26px", display: "flex", flexDirection: "column", boxShadow: "0 4px 24px rgba(0,0,0,.28)" }, onclick: flipCard }
+      { style: { marginTop: "18px", flex: "1", background: "#faf9f5", borderRadius: "28px", padding: "34px 26px", display: "flex", flexDirection: "column", boxShadow: "0 4px 24px rgba(0,0,0,.28)" } }
     );
 
     if (!s.flipped) {
@@ -755,31 +965,25 @@
           { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
           h(
             "div",
-            { class: "tap", style: { display: "flex", alignItems: "center", gap: "11px", padding: "10px 16px 10px 12px", borderRadius: "9999px", background: "#f5f4ed", border: "1px solid #f0eee6" }, onclick: (e) => { e.stopPropagation(); playCardAudio(c); } },
+            { class: "tap", style: { display: "flex", alignItems: "center", gap: "11px", padding: "10px 16px 10px 12px", borderRadius: "9999px", background: "#f5f4ed", border: "1px solid #f0eee6" }, onclick: () => playCardAudio(c) },
             icon('<path d="M8 5l11 7-11 7z"/>', 16, "#c96442"),
             h("span", { style: { fontSize: "11.5px", color: "#5e5d59" } }, c.audio && c.audio.type === "voice" ? "your voice" : "play audio")
           ),
-          h("div", { style: { fontSize: "12px", color: "#b0aea5" } }, "Tap to reveal")
+          h("div", { style: { fontSize: "12px", color: "#b0aea5" } }, "Recall it, then judge yourself")
         )
       );
     } else {
-      const next = INTERVAL_LABELS[Math.min(5, c.box + 1)];
+      const gap = formatGap(c.dueAt - c.lastReviewAt);
       flipZone.appendChild(
         h(
           "div",
           { class: "anim-in", style: { display: "flex", flexDirection: "column", height: "100%" } },
           h("div", { style: { fontFamily: "var(--jp)", fontSize: "16px", lineHeight: "1.5", color: "#5e5d59", paddingBottom: "18px", borderBottom: "1px solid #f0eee6" } }, c.front),
           h("div", { style: { flex: "1", display: "flex", alignItems: "center" } }, h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", lineHeight: "1.35", color: "#141413" } }, c.back)),
-          h("div", { style: { fontSize: "11.5px", color: "#b0aea5" } }, "Seen " + c.seen + " times · next in " + next + " if you say good")
+          h("div", { style: { fontSize: "11.5px", color: "#b0aea5" } }, "Reviewed " + c.reps + " times · next review in " + gap)
         )
       );
     }
-
-    const grades = [
-      { name: "Again", kind: "again", iv: INTERVAL_LABELS[0], bg: "rgba(250,249,245,.06)", bd: "rgba(250,249,245,.16)", fg: "#faf9f5", sub: "#b0aea5" },
-      { name: "Good", kind: "good", iv: INTERVAL_LABELS[Math.min(5, c.box + 1)], bg: "#c96442", bd: "#c96442", fg: "#faf9f5", sub: "rgba(250,249,245,.75)" },
-      { name: "Easy", kind: "easy", iv: INTERVAL_LABELS[Math.min(5, c.box + 2)], bg: "rgba(250,249,245,.06)", bd: "rgba(250,249,245,.16)", fg: "#faf9f5", sub: "#b0aea5" },
-    ];
 
     return h(
       "div",
@@ -793,24 +997,31 @@
         h("div", { style: { fontSize: "12px", color: "#b0aea5", fontVariantNumeric: "tabular-nums" } }, (s.qi + 1) + " / " + s.queue.length)
       ),
 
-      h("div", { style: { marginTop: "28px", display: "flex", flexWrap: "wrap", gap: "7px" } }, ...s.tags.map((t) => h("div", { style: { padding: "5px 11px", borderRadius: "9999px", background: "rgba(250,249,245,.08)", color: "#b0aea5", fontSize: "11px" } }, t))),
+      h(
+        "div",
+        { style: { marginTop: "28px", display: "flex", flexWrap: "wrap", gap: "7px" } },
+        s.practice ? h("div", { style: { padding: "5px 11px", borderRadius: "9999px", background: "rgba(201,100,66,.18)", color: "#d97757", fontSize: "11px" } }, "practice — not due yet") : null,
+        ...s.tags.map((t) => h("div", { style: { padding: "5px 11px", borderRadius: "9999px", background: "rgba(250,249,245,.08)", color: "#b0aea5", fontSize: "11px" } }, t))
+      ),
 
       flipZone,
 
       s.flipped
-        ? h(
+        ? h("div", { class: "tap", style: { marginTop: "16px", padding: "16px", borderRadius: "14px", textAlign: "center", background: "#c96442", color: "#faf9f5", fontSize: "15px", fontWeight: "500" }, onclick: nextCard }, "Next card")
+        : h(
             "div",
             { style: { marginTop: "16px", display: "flex", gap: "9px" } },
-            ...grades.map((g) =>
-              h(
-                "div",
-                { class: "tap", style: { flex: "1", padding: "14px 8px", borderRadius: "14px", textAlign: "center", background: g.bg, border: "1px solid " + g.bd }, onclick: () => gradeCard(g.kind) },
-                h("div", { style: { fontSize: "14px", fontWeight: "500", color: g.fg } }, g.name),
-                h("div", { style: { marginTop: "4px", fontSize: "11px", color: g.sub } }, g.iv)
-              )
+            h(
+              "div",
+              { class: "tap", style: { flex: "1", padding: "16px 8px", borderRadius: "14px", textAlign: "center", background: "rgba(250,249,245,.06)", border: "1px solid rgba(250,249,245,.16)" }, onclick: () => answerCard(false) },
+              h("div", { style: { fontSize: "14.5px", fontWeight: "500", color: "#faf9f5" } }, "Didn't remember")
+            ),
+            h(
+              "div",
+              { class: "tap", style: { flex: "1", padding: "16px 8px", borderRadius: "14px", textAlign: "center", background: "#c96442", border: "1px solid #c96442" }, onclick: () => answerCard(true) },
+              h("div", { style: { fontSize: "14.5px", fontWeight: "500", color: "#faf9f5" } }, "Remembered")
             )
           )
-        : h("div", { style: { marginTop: "16px", padding: "14px", borderRadius: "14px", textAlign: "center", fontSize: "13px", color: "#b0aea5", border: "1px solid rgba(250,249,245,.12)" } }, "Read it aloud, then reveal the note")
     );
   }
 
@@ -824,14 +1035,13 @@
       h(
         "div",
         { style: { marginTop: "30px", display: "flex", flexDirection: "column", gap: "1px", background: "rgba(250,249,245,.1)", borderRadius: "16px", overflow: "hidden" } },
-        h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", background: "#1a1a18" } }, h("span", { style: { fontSize: "13.5px", color: "#b0aea5" } }, "Again"), h("span", { style: { fontFamily: "var(--serif)", fontSize: "19px", color: "#d97757" } }, String(s.results.again))),
-        h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", background: "#1a1a18" } }, h("span", { style: { fontSize: "13.5px", color: "#b0aea5" } }, "Good"), h("span", { style: { fontFamily: "var(--serif)", fontSize: "19px", color: "#faf9f5" } }, String(s.results.good))),
-        h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", background: "#1a1a18" } }, h("span", { style: { fontSize: "13.5px", color: "#b0aea5" } }, "Easy"), h("span", { style: { fontFamily: "var(--serif)", fontSize: "19px", color: "#faf9f5" } }, String(s.results.easy)))
+        h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", background: "#1a1a18" } }, h("span", { style: { fontSize: "13.5px", color: "#b0aea5" } }, "Didn't remember"), h("span", { style: { fontFamily: "var(--serif)", fontSize: "19px", color: "#d97757" } }, String(s.results.again))),
+        h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", background: "#1a1a18" } }, h("span", { style: { fontSize: "13.5px", color: "#b0aea5" } }, "Remembered"), h("span", { style: { fontFamily: "var(--serif)", fontSize: "19px", color: "#faf9f5" } }, String(s.results.good)))
       ),
       h(
         "div",
         { style: { marginTop: "26px", fontSize: "12.5px", lineHeight: "1.7", color: "#5e5d59" } },
-        "Cards you marked again come back in " + INTERVAL_LABELS[0] + ". The rest are scheduled out to " + INTERVAL_LABELS[2] + " and beyond. " + dueCards(null).length + " cards still due today."
+        "Cards you didn't remember come back for a quick retry soon. The rest are scheduled by FSRS based on how well you know each one — " + dueCards(null).length + " cards still due today."
       ),
       h("div", { style: { flex: "1" } }),
       h("div", { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", background: "#c96442", color: "#faf9f5", fontSize: "15px", fontWeight: "500" }, onclick: () => go("home") }, "Back to today"),
@@ -1132,6 +1342,7 @@
     root.querySelectorAll("[data-remember-scroll]").forEach((el) => {
       const m = scrollMemory[el.getAttribute("data-remember-scroll")];
       if (m) { el.scrollTop = m.top; el.scrollLeft = m.left; }
+      else if (el.hasAttribute("data-scroll-to-end")) { el.scrollLeft = el.scrollWidth; }
     });
 
     if (focusInfo) {

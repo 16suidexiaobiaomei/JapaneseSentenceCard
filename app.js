@@ -10,6 +10,15 @@
   const AUTOPLAY_AUDIO = true;
 
   // ---------------------------------------------------------------------
+  // Supabase (auth + cloud database). The publishable key is meant to be
+  // public — it's rate-limited and Row Level Security on every table is
+  // what actually keeps one user's data away from another's.
+  // ---------------------------------------------------------------------
+  const SUPABASE_URL = "https://asgyhietqpoamagitycs.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_oCqtHBphJuPnFgrK87K7PA_XwemlHSO";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // ---------------------------------------------------------------------
   // FSRS (Free Spaced Repetition Scheduler) — v4.5 formulas & default weights.
   //
   // The retrievability/difficulty/stability formulas below are the exact
@@ -99,6 +108,8 @@
   function makeSeedData() {
     const now = Date.now();
     return {
+      userId: null, // whose account this cached blob belongs to (see enterApp)
+      pendingDeletes: [], // card ids deleted locally but not yet confirmed deleted in the cloud
       cards: SEED_CARDS.map((c, i) => ({
         id: "seed-" + i,
         front: c[0],
@@ -113,9 +124,10 @@
         dueAt: now,
         audio: { type: "system" },
         createdAt: now - (SEED_CARDS.length - i) * 1000,
+        updatedAt: now - (SEED_CARDS.length - i) * 1000,
       })),
       reviewLog: {}, // "YYYY-MM-DD" -> count
-      profile: { name: "", photo: null },
+      profile: { username: "", photo: null },
       totalActiveMs: 0,
     };
   }
@@ -127,14 +139,21 @@
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.cards)) return makeSeedData();
       if (!parsed.reviewLog) parsed.reviewLog = {};
-      if (!parsed.profile) parsed.profile = { name: "", photo: null };
+      if (!parsed.profile) parsed.profile = { username: "", photo: null };
+      if (parsed.profile.name !== undefined && !parsed.profile.username) {
+        parsed.profile.username = parsed.profile.name;
+      }
+      delete parsed.profile.name;
       if (typeof parsed.totalActiveMs !== "number") parsed.totalActiveMs = 0;
+      if (typeof parsed.userId !== "string") parsed.userId = null;
+      if (!Array.isArray(parsed.pendingDeletes)) parsed.pendingDeletes = [];
       parsed.cards.forEach((c) => {
         if (c.stability === undefined) c.stability = null;
         if (c.difficulty === undefined) c.difficulty = null;
         if (c.reps === undefined) c.reps = c.seen || 0;
         if (c.lapses === undefined) c.lapses = 0;
         if (c.lastReviewAt === undefined) c.lastReviewAt = null;
+        if (c.updatedAt === undefined) c.updatedAt = c.createdAt || Date.now();
         delete c.box;
         delete c.seen;
       });
@@ -144,7 +163,7 @@
     }
   }
 
-  let data = loadData();
+  let data = makeSeedData(); // safe placeholder; real content loads once auth resolves (see bottom of file)
 
   function saveData() {
     try {
@@ -162,7 +181,7 @@
       const now = Date.now();
       const delta = now - lastTick;
       lastTick = now;
-      if (document.visibilityState === "visible" && delta > 0 && delta < 60000) {
+      if (document.visibilityState === "visible" && delta > 0 && delta < 60000 && ui.screen !== "boot" && ui.screen !== "auth") {
         data.totalActiveMs += delta;
         saveData();
       }
@@ -170,13 +189,23 @@
   })();
 
   // Transient (not persisted) UI/session state
+  function blankAuthState() {
+    return { mode: "login", email: "", password: "", pendingEmail: "", error: "", busy: false };
+  }
+
+  function blankPasswordState() {
+    return { password: "", confirm: "", error: "", busy: false };
+  }
+
   let ui = {
-    screen: "home",
+    screen: "boot", // "boot" | "auth" | the usual app screens, set once auth resolves (see bottom of file)
     sel: [], // selected tags on the tags screen
     query: "",
     filter: "All",
     draft: { editingId: null, front: "", back: "", tags: [], newTag: "", audioMode: "system", recState: "idle", recSec: 0, recording: null },
-    profileDraft: { name: "", photo: null },
+    profileDraft: { username: "", photo: null },
+    auth: blankAuthState(),
+    pwDraft: blankPasswordState(),
     activityRange: "year", // "year" | "30d" | "7d"
     tagsEditMode: false,
     session: null, // { queue: [ids], qi, flipped, tags, results }
@@ -213,6 +242,14 @@
     const s = [];
     data.cards.forEach((c) => c.tags.forEach((t) => { if (!s.includes(t)) s.push(t); }));
     return s;
+  }
+
+  // Same as allTags(), but always includes "Untagged" even when no card
+  // currently needs it — so it stays available to filter/review/edit by,
+  // rather than only appearing after the fact once a card falls into it.
+  function browsableTags() {
+    const s = allTags();
+    return s.includes(UNTAGGED_TAG) ? s : s.concat(UNTAGGED_TAG);
   }
 
   function streakDays() {
@@ -322,6 +359,192 @@
   function logReviewToday() {
     const key = dateKey(new Date());
     data.reviewLog[key] = (data.reviewLog[key] || 0) + 1;
+  }
+
+  // ---------------------------------------------------------------------
+  // Cloud sync (Supabase). The app stays offline-first: every mutation
+  // below applies to the local `data` blob and localStorage immediately
+  // (unchanged from before), and *separately* fires a best-effort push to
+  // the cloud that silently no-ops if there's no session or no network —
+  // nothing here is ever awaited by the UI. syncNow() is the reconciler
+  // that runs on login and periodically, pulling remote changes down and
+  // pushing anything local that's newer, so a connection dropping mid-edit
+  // just means that edit syncs on the next successful pass instead.
+  // ---------------------------------------------------------------------
+
+  async function getSessionSafe() {
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      return session || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function cardToRow(card, userId) {
+    return {
+      id: card.id,
+      user_id: userId,
+      front: card.front,
+      romaji: card.romaji || "",
+      back: card.back,
+      tags: card.tags,
+      stability: card.stability,
+      difficulty: card.difficulty,
+      reps: card.reps,
+      lapses: card.lapses,
+      last_review_at: card.lastReviewAt ? new Date(card.lastReviewAt).toISOString() : null,
+      due_at: new Date(card.dueAt).toISOString(),
+      audio: card.audio,
+      created_at: new Date(card.createdAt).toISOString(),
+    };
+  }
+
+  function rowToCard(row) {
+    return {
+      id: row.id,
+      front: row.front,
+      romaji: row.romaji || "",
+      back: row.back,
+      tags: row.tags || [],
+      stability: row.stability,
+      difficulty: row.difficulty,
+      reps: row.reps,
+      lapses: row.lapses,
+      lastReviewAt: row.last_review_at ? new Date(row.last_review_at).getTime() : null,
+      dueAt: new Date(row.due_at).getTime(),
+      audio: row.audio,
+      createdAt: new Date(row.created_at).getTime(),
+      updatedAt: new Date(row.updated_at).getTime(),
+    };
+  }
+
+  async function pushCard(card) {
+    const session = await getSessionSafe();
+    if (!session) return;
+    try {
+      const { data: row, error } = await sb.from("cards").upsert(cardToRow(card, session.user.id)).select().single();
+      if (!error && row) card.updatedAt = new Date(row.updated_at).getTime();
+    } catch (e) {
+      console.warn("pushCard failed (offline?)", e);
+    }
+  }
+
+  async function pushCardsBulk(cards) {
+    if (!cards.length) return;
+    const session = await getSessionSafe();
+    if (!session) return;
+    try {
+      const rows = cards.map((c) => cardToRow(c, session.user.id));
+      const { data: savedRows, error } = await sb.from("cards").upsert(rows).select();
+      if (!error && savedRows) {
+        const byId = new Map(savedRows.map((r) => [r.id, r]));
+        cards.forEach((c) => { const r = byId.get(c.id); if (r) c.updatedAt = new Date(r.updated_at).getTime(); });
+      }
+    } catch (e) {
+      console.warn("pushCardsBulk failed (offline?)", e);
+    }
+  }
+
+  async function pushDeleteCard(id) {
+    const session = await getSessionSafe();
+    if (!session) return;
+    try {
+      const { error } = await sb.from("cards").delete().eq("id", id).eq("user_id", session.user.id);
+      if (!error) data.pendingDeletes = data.pendingDeletes.filter((x) => x !== id);
+    } catch (e) {
+      console.warn("pushDeleteCard failed (offline?)", e);
+    }
+  }
+
+  async function pushProfile() {
+    const session = await getSessionSafe();
+    if (!session) return;
+    try {
+      await sb.from("profiles").upsert({ id: session.user.id, username: data.profile.username || null, photo: data.profile.photo });
+    } catch (e) {
+      console.warn("pushProfile failed (offline?)", e);
+    }
+  }
+
+  async function pushReviewDay(day) {
+    const session = await getSessionSafe();
+    if (!session) return;
+    try {
+      await sb.from("review_log").upsert({ user_id: session.user.id, day, count: data.reviewLog[day] || 0 });
+    } catch (e) {
+      console.warn("pushReviewDay failed (offline?)", e);
+    }
+  }
+
+  let syncing = false;
+
+  async function syncNow() {
+    if (syncing) return;
+    syncing = true;
+    try {
+      const session = await getSessionSafe();
+      if (!session) return;
+      const userId = session.user.id;
+
+      // Flush any deletes that couldn't reach the server yet.
+      for (const id of data.pendingDeletes.slice()) await pushDeleteCard(id);
+
+      let remoteProfile, remoteCards, remoteLog;
+      try {
+        [{ data: remoteProfile }, { data: remoteCards }, { data: remoteLog }] = await Promise.all([
+          sb.from("profiles").select("*").eq("id", userId).maybeSingle(),
+          sb.from("cards").select("*").eq("user_id", userId),
+          sb.from("review_log").select("*").eq("user_id", userId),
+        ]);
+      } catch (e) {
+        console.warn("Sync pull failed (offline?)", e);
+        return; // keep working from whatever's local
+      }
+
+      if (remoteProfile) {
+        data.profile = { username: remoteProfile.username || "", photo: remoteProfile.photo || null };
+      }
+
+      const mergedLog = Object.assign({}, data.reviewLog);
+      (remoteLog || []).forEach((r) => { mergedLog[r.day] = Math.max(mergedLog[r.day] || 0, r.count); });
+      data.reviewLog = mergedLog;
+
+      const remoteList = (remoteCards || []).filter((r) => !data.pendingDeletes.includes(r.id));
+
+      if (remoteList.length === 0 && data.cards.length === 0) {
+        // Brand new account, nothing local either: start with the example deck.
+        data.cards = makeSeedData().cards;
+        await pushCardsBulk(data.cards);
+      } else if (remoteList.length === 0) {
+        // Brand new account with existing local cards: claim them as the initial cloud set.
+        await pushCardsBulk(data.cards);
+      } else {
+        const localById = new Map(data.cards.map((c) => [c.id, c]));
+        const merged = [];
+        const toPush = [];
+        const seenIds = new Set();
+        for (const row of remoteList) {
+          seenIds.add(row.id);
+          const localCard = localById.get(row.id);
+          if (!localCard) { merged.push(rowToCard(row)); continue; }
+          const remoteUpdated = new Date(row.updated_at).getTime();
+          if ((localCard.updatedAt || 0) > remoteUpdated) { merged.push(localCard); toPush.push(localCard); }
+          else { merged.push(rowToCard(row)); }
+        }
+        for (const c of data.cards) {
+          if (!seenIds.has(c.id) && !data.pendingDeletes.includes(c.id)) { merged.push(c); toPush.push(c); }
+        }
+        data.cards = merged;
+        if (toPush.length) await pushCardsBulk(toPush);
+      }
+
+      data.userId = userId;
+      saveData();
+      render();
+    } finally {
+      syncing = false;
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -502,9 +725,12 @@
 
     s.results[remembered ? "good" : "again"] += 1;
     s.flipped = true;
+    c.updatedAt = now;
     logReviewToday();
     saveData();
     render();
+    pushCard(c);
+    pushReviewDay(dateKey(new Date()));
   }
 
   function nextCard() {
@@ -535,16 +761,20 @@
     const msg = 'Delete "' + tag + '"? It will be removed from ' + count + " card" + (count === 1 ? "" : "s")
       + (count ? '. Any left with no tags will be marked "' + UNTAGGED_TAG + '".' : ".");
     if (!confirm(msg)) return;
+    const affected = [];
     data.cards.forEach((c) => {
       if (c.tags.includes(tag)) {
         c.tags = c.tags.filter((x) => x !== tag);
         if (!c.tags.length) c.tags = [UNTAGGED_TAG];
+        c.updatedAt = Date.now();
+        affected.push(c);
       }
     });
     ui.sel = ui.sel.filter((x) => x !== tag);
     if (ui.filter === tag) ui.filter = "All";
     saveData();
     render();
+    pushCardsBulk(affected);
   }
 
   function toggleDraftTag(t) {
@@ -595,12 +825,14 @@
     if (!card) return;
     if (!confirm('Delete this card? "' + card.front + '" — this can\'t be undone.')) return;
     data.cards = data.cards.filter((c) => c.id !== id);
+    data.pendingDeletes.push(id);
     saveData();
     ui.draft = blankDraft();
     ui.screen = "browse";
     ui.filter = "All";
     ui.query = "";
     render();
+    pushDeleteCard(id);
   }
 
   function saveCard() {
@@ -616,6 +848,7 @@
         ? { type: "voice", data: d.recording }
         : null;
 
+    let savedCard;
     if (d.editingId) {
       const card = data.cards.find((c) => c.id === d.editingId);
       if (card) {
@@ -624,9 +857,11 @@
         card.back = d.back.trim();
         card.tags = tags;
         card.audio = audio;
+        card.updatedAt = Date.now();
       }
+      savedCard = card;
     } else {
-      data.cards.unshift({
+      savedCard = {
         id: "c-" + Date.now(),
         front,
         romaji,
@@ -640,7 +875,9 @@
         dueAt: Date.now(),
         audio,
         createdAt: Date.now(),
-      });
+        updatedAt: Date.now(),
+      };
+      data.cards.unshift(savedCard);
     }
     saveData();
     ui.draft = blankDraft();
@@ -648,10 +885,12 @@
     ui.filter = "All";
     ui.query = "";
     render();
+    if (savedCard) pushCard(savedCard);
   }
 
   function openProfile() {
-    ui.profileDraft = { name: data.profile.name, photo: data.profile.photo };
+    ui.profileDraft = { username: data.profile.username, photo: data.profile.photo };
+    ui.pwDraft = blankPasswordState();
     go("profile");
   }
 
@@ -660,9 +899,135 @@
   }
 
   function saveProfile() {
-    data.profile = { name: ui.profileDraft.name.trim(), photo: ui.profileDraft.photo };
+    data.profile = { username: ui.profileDraft.username.trim(), photo: ui.profileDraft.photo };
     saveData();
     go("home");
+    pushProfile();
+  }
+
+  async function changePassword() {
+    const pw = ui.pwDraft;
+    if (pw.busy) return;
+    if (pw.password.length < 6) { pw.error = "Password must be at least 6 characters."; render(); return; }
+    if (pw.password !== pw.confirm) { pw.error = "Passwords don't match."; render(); return; }
+    pw.busy = true;
+    pw.error = "";
+    render();
+    const { error } = await sb.auth.updateUser({ password: pw.password });
+    pw.busy = false;
+    if (error) {
+      pw.error = error.message;
+      render();
+      return;
+    }
+    ui.pwDraft = blankPasswordState();
+    render();
+  }
+
+  // Shared by an explicit "Log out" tap and by onAuthStateChange (which also
+  // catches a session expiring, or another tab logging this browser out).
+  function resetToAuthScreen() {
+    data = makeSeedData();
+    ui.auth = blankAuthState();
+    ui.screen = "auth";
+    render();
+  }
+
+  async function logOut() {
+    if (!confirm("Log out?")) return;
+    resetToAuthScreen();
+    await sb.auth.signOut();
+  }
+
+  // ---------------------------------------------------------------------
+  // Auth screens (sign up + one-time email code, or log in)
+  // ---------------------------------------------------------------------
+
+  // Runs once there's a confirmed session: loads this user's cached data if
+  // this browser already had it, otherwise starts from a clean slate, shows
+  // the app immediately, then reconciles with the cloud in the background.
+  async function enterApp(session) {
+    const userId = session.user.id;
+    const cached = loadData();
+    if (cached.userId === userId) {
+      data = cached;
+    } else {
+      data = makeSeedData();
+      data.userId = userId;
+      data.cards = []; // avoid flashing the example deck if this turns out to be a returning user
+    }
+    ui.screen = "home";
+    render();
+    await syncNow();
+  }
+
+  async function signUp() {
+    const a = ui.auth;
+    if (a.busy) return;
+    const email = a.email.trim();
+    if (!email || a.password.length < 6) { a.error = "Enter an email and a password of at least 6 characters."; render(); return; }
+    a.busy = true;
+    a.error = "";
+    render();
+    const { error } = await sb.auth.signUp({ email, password: a.password });
+    a.busy = false;
+    if (error) { a.error = error.message; render(); return; }
+    a.pendingEmail = email;
+    a.password = "";
+    a.mode = "verify";
+    render();
+  }
+
+  // Signup confirmation is link-based: the email has a "Confirm email
+  // address" link back to this same site. Clicking it (in any tab) lands
+  // here with the session already established — supabase-js parses the
+  // token straight out of the URL — so our boot check (or the
+  // onAuthStateChange listener below) picks it up with no code to type.
+  // This button is a manual fallback for whenever that doesn't fire.
+  async function checkIfConfirmed() {
+    const a = ui.auth;
+    if (a.busy) return;
+    a.busy = true;
+    a.error = "";
+    render();
+    const session = await getSessionSafe();
+    a.busy = false;
+    if (session) { ui.auth = blankAuthState(); await enterApp(session); return; }
+    a.error = "Not yet — open the link from the confirmation email first.";
+    render();
+  }
+
+  async function resendConfirmationEmail() {
+    const a = ui.auth;
+    if (a.busy) return;
+    a.busy = true;
+    a.error = "";
+    render();
+    const { error } = await sb.auth.resend({ type: "signup", email: a.pendingEmail });
+    a.busy = false;
+    a.error = error ? error.message : "Email resent — check your inbox.";
+    render();
+  }
+
+  async function logIn() {
+    const a = ui.auth;
+    if (a.busy) return;
+    const email = a.email.trim();
+    if (!email || !a.password) { a.error = "Enter your email and password."; render(); return; }
+    a.busy = true;
+    a.error = "";
+    render();
+    const { data: result, error } = await sb.auth.signInWithPassword({ email, password: a.password });
+    a.busy = false;
+    if (error) { a.error = error.message; render(); return; }
+    ui.auth = blankAuthState();
+    await enterApp(result.session);
+  }
+
+  function switchAuthMode(mode) {
+    ui.auth = blankAuthState();
+    ui.auth.mode = mode;
+    render();
   }
 
   function handlePhotoFile(file) {
@@ -690,7 +1055,7 @@
   // ---------------------------------------------------------------------
 
   function avatarNode(profile, size) {
-    const initial = profile.name.trim() ? profile.name.trim()[0].toUpperCase() : null;
+    const initial = profile.username && profile.username.trim() ? profile.username.trim()[0].toUpperCase() : null;
     const style = {
       width: size + "px", height: size + "px", borderRadius: "9999px", flexShrink: "0",
       display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
@@ -747,6 +1112,102 @@
   // Screens
   // ---------------------------------------------------------------------
 
+  function logoMark() {
+    return h(
+      "div",
+      { style: { display: "flex", alignItems: "center", gap: "9px" } },
+      h("div", { style: { width: "26px", height: "26px", borderRadius: "8px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "15px", fontWeight: "600" } }, "S"),
+      h("div", { style: { fontFamily: "var(--serif)", fontSize: "16px", fontWeight: "500", color: "#141413", letterSpacing: ".1px" } }, "Sentence cards")
+    );
+  }
+
+  function screenBoot() {
+    return h(
+      "div",
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "14px" } },
+      logoMark(),
+      h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "Loading…")
+    );
+  }
+
+  function authField(dataField, type, value, placeholder, onInput) {
+    return h("input", {
+      "data-field": dataField, type, value, placeholder,
+      style: { width: "100%", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "15px", color: "#141413" },
+      oninput: onInput,
+    });
+  }
+
+  function authButton(label, busyLabel, enabled, busy, onClick) {
+    return h(
+      "div",
+      { class: enabled && !busy ? "tap" : "", style: { marginTop: "16px", padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: enabled ? "#c96442" : "#f0eee6", color: enabled ? "#faf9f5" : "#b0aea5" }, onclick: enabled && !busy ? onClick : null },
+      busy ? busyLabel : label
+    );
+  }
+
+  function screenAuth() {
+    const a = ui.auth;
+
+    const errorNode = a.error ? h("div", { style: { marginTop: "14px", fontSize: "13px", color: "#c96442", lineHeight: "1.5" } }, a.error) : null;
+
+    let title, subtitle, body;
+
+    if (a.mode === "verify") {
+      title = "Check your email.";
+      subtitle = "We sent a confirmation link to " + a.pendingEmail + ". Open it on this device to finish creating your account — this page will pick it up automatically.";
+      body = [
+        authButton("I've confirmed — check again", "Checking…", true, a.busy, checkIfConfirmed),
+        errorNode,
+        h("div", { style: { marginTop: "18px", display: "flex", justifyContent: "space-between" } },
+          h("div", { class: "tap", style: { fontSize: "13px", color: "#5e5d59" }, onclick: () => switchAuthMode("signup") }, "Use a different email"),
+          h("div", { class: "tap", style: { fontSize: "13px", color: "#c96442" }, onclick: resendConfirmationEmail }, "Resend email")
+        ),
+      ];
+    } else if (a.mode === "signup") {
+      title = "Create your account.";
+      subtitle = "Your cards, tags and review history will sync to any device you log into.";
+      body = [
+        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; render(); }),
+        h("div", { style: { height: "10px" } }),
+        authField("authPassword", "password", a.password, "Password (min 6 characters)", (e) => { a.password = e.target.value; render(); }),
+        authButton("Create account", "Creating…", !!(a.email.trim() && a.password), a.busy, signUp),
+        errorNode,
+        h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
+          "Already have an account? ",
+          h("span", { class: "tap", style: { color: "#c96442" }, onclick: () => switchAuthMode("login") }, "Log in")
+        ),
+      ];
+    } else {
+      title = "Welcome back.";
+      subtitle = "Log in to pick up right where you left off.";
+      body = [
+        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; render(); }),
+        h("div", { style: { height: "10px" } }),
+        authField("authPassword", "password", a.password, "Password", (e) => { a.password = e.target.value; render(); }),
+        authButton("Log in", "Logging in…", !!(a.email.trim() && a.password), a.busy, logIn),
+        errorNode,
+        h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
+          "New here? ",
+          h("span", { class: "tap", style: { color: "#c96442" }, onclick: () => switchAuthMode("signup") }, "Create an account")
+        ),
+      ];
+    }
+
+    return h(
+      "div",
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+      h("div", { style: { padding: "8px 20px 0" } }, logoMark()),
+      h(
+        "div",
+        { style: { flex: "1", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 20px" } },
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", lineHeight: "1.15", color: "#141413" } }, title),
+        h("div", { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } }, subtitle),
+        h("div", { style: { marginTop: "26px" } }, ...body)
+      )
+    );
+  }
+
   function statTile(label, value) {
     return h(
       "div",
@@ -796,7 +1257,7 @@
       h(
         "div",
         { style: { padding: "6px 20px 0" } },
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "30px", lineHeight: "1.15", color: "#141413", letterSpacing: "-.2px" } }, data.profile.name.trim() ? "Ready for today, " + data.profile.name.trim().split(/\s+/)[0] + "." : "Ready for today."),
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "30px", lineHeight: "1.15", color: "#141413", letterSpacing: "-.2px" } }, data.profile.username && data.profile.username.trim() ? "Ready for today, " + data.profile.username.trim() + "." : "Ready for today."),
         h("div", { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } }, dueLine)
       ),
 
@@ -901,7 +1362,7 @@
   }
 
   function screenTags() {
-    const tags = allTags();
+    const tags = browsableTags();
     const due = dueCards(null).length;
     const selDue = dueCards(ui.sel).length;
     const n = Math.min(selDue, SESSION_SIZE);
@@ -1131,7 +1592,7 @@
   const RECENT_MS = 7 * 86400000;
 
   function screenBrowse() {
-    const tags = allTags();
+    const tags = browsableTags();
     const q = ui.query.trim().toLowerCase();
     const list = data.cards.filter((x) => {
       const okQ = !q || x.front.toLowerCase().includes(q) || x.back.toLowerCase().includes(q) || x.tags.join(" ").toLowerCase().includes(q);
@@ -1367,7 +1828,7 @@
       h(
         "div",
         { style: { padding: "18px 20px 0", fontSize: "14px", lineHeight: "1.6", color: "#5e5d59", fontStyle: "italic" } },
-        "We'll greet you by name. Add a photo if you'd like."
+        "We'll greet you by username. Add a photo if you'd like — it follows you to any device you log in on."
       ),
 
       h(
@@ -1386,12 +1847,40 @@
       h(
         "div",
         { style: { padding: "24px 20px 0" } },
-        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Name"),
+        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Username"),
         h("input", {
-          "data-field": "profileName", value: d.name, placeholder: "Your name",
+          "data-field": "profileUsername", value: d.username, placeholder: "Your username",
           style: { marginTop: "10px", width: "100%", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "19px", color: "#141413" },
-          oninput: (e) => { d.name = e.target.value; render(); },
+          oninput: (e) => { d.username = e.target.value; render(); },
         })
+      ),
+
+      h(
+        "div",
+        { style: { padding: "30px 20px 0" } },
+        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Change password"),
+        h("input", {
+          "data-field": "pwNew", type: "password", value: ui.pwDraft.password, placeholder: "New password",
+          style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" },
+          oninput: (e) => { ui.pwDraft.password = e.target.value; render(); },
+        }),
+        h("input", {
+          "data-field": "pwConfirm", type: "password", value: ui.pwDraft.confirm, placeholder: "Confirm new password",
+          style: { marginTop: "8px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" },
+          oninput: (e) => { ui.pwDraft.confirm = e.target.value; render(); },
+        }),
+        ui.pwDraft.error ? h("div", { style: { marginTop: "8px", fontSize: "12px", color: "#c96442" } }, ui.pwDraft.error) : null,
+        h(
+          "div",
+          { class: ui.pwDraft.password && !ui.pwDraft.busy ? "tap" : "", style: { marginTop: "10px", padding: "13px", borderRadius: "12px", textAlign: "center", background: "#f0eee6", color: "#141413", fontSize: "13.5px", fontWeight: "500" }, onclick: ui.pwDraft.password && !ui.pwDraft.busy ? changePassword : null },
+          ui.pwDraft.busy ? "Updating…" : "Update password"
+        )
+      ),
+
+      h(
+        "div",
+        { style: { padding: "30px 20px 0" } },
+        h("div", { class: "tap", style: { padding: "14px", borderRadius: "12px", textAlign: "center", border: "1px solid #f0eee6", color: "#5e5d59", fontSize: "13.5px" }, onclick: logOut }, "Log out")
       ),
 
       h("div", { style: { height: "40px" } })
@@ -1426,6 +1915,8 @@
 
     let content;
     switch (ui.screen) {
+      case "boot": content = screenBoot(); break;
+      case "auth": content = screenAuth(); break;
       case "tags": content = screenTags(); break;
       case "review": content = ui.session ? screenReview() : screenHome(); break;
       case "done": content = ui.session ? screenDone() : screenHome(); break;
@@ -1449,10 +1940,49 @@
         el.focus();
         if (typeof focusInfo.start === "number" && el.setSelectionRange) {
           try { el.setSelectionRange(focusInfo.start, focusInfo.end); } catch {}
+        } else if (el.value) {
+          // Some input types (email, number, ...) don't support
+          // setSelectionRange at all — focusing them leaves the caret at
+          // position 0, so every keystroke would insert at the *start*
+          // instead of the end. Re-assigning the value is a reliable
+          // cross-browser way to force the caret to the end instead.
+          const v = el.value;
+          el.value = "";
+          el.value = v;
         }
       }
     }
   }
 
-  render();
+  // ---------------------------------------------------------------------
+  // Boot: gate the whole app behind auth. Show the app immediately if a
+  // (possibly offline-cached) session already exists; otherwise the auth
+  // screen. A background timer re-syncs periodically so multi-device
+  // changes show up without needing an explicit action.
+  // ---------------------------------------------------------------------
+
+  render(); // "boot" screen while we check for a session
+
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT" && ui.screen !== "auth" && ui.screen !== "boot") resetToAuthScreen();
+    // Catches a confirmation link opened in this same tab — supabase-js
+    // parses the token out of the URL and fires this before our own
+    // signUp()/logIn() would ever have set the screen away from "auth".
+    if (event === "SIGNED_IN" && session && (ui.screen === "auth" || ui.screen === "boot")) enterApp(session);
+  });
+
+  (async () => {
+    const session = await getSessionSafe();
+    if (session) {
+      await enterApp(session);
+    } else {
+      ui.screen = "auth";
+      render();
+    }
+  })();
+
+  setInterval(() => { syncNow(); }, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncNow();
+  });
 })();

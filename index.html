@@ -19,6 +19,11 @@
 </head>
 <body>
 <div id="app"></div>
+<!-- Auto-generates romaji pronunciation for Japanese sentences (kanji-aware,
+     via morphological analysis) — dictionary loads lazily, only when the
+     app actually needs to convert a sentence. -->
+<script src="https://cdn.jsdelivr.net/npm/kuroshiro@1.1.2/dist/kuroshiro.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/kuroshiro-analyzer-kuromoji@1.1.0/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

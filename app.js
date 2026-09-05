@@ -433,6 +433,61 @@
   }
 
   // ---------------------------------------------------------------------
+  // Romaji (auto pronunciation) — kanji-aware, via a real Japanese
+  // morphological analyzer (kuromoji) rather than a plain kana lookup table,
+  // since most sentences here mix kanji with kana and a kanji's reading
+  // depends on context. The ~15MB dictionary is fetched lazily, only the
+  // first time a romaji is actually generated, and the browser caches it.
+  // ---------------------------------------------------------------------
+
+  let kuroshiroInitPromise = null;
+
+  function getKuroshiro() {
+    if (!kuroshiroInitPromise) {
+      kuroshiroInitPromise = (async () => {
+        if (typeof Kuroshiro === "undefined" || typeof KuromojiAnalyzer === "undefined") {
+          throw new Error("romaji engine did not load");
+        }
+        const k = new Kuroshiro();
+        const analyzer = new KuromojiAnalyzer({ dictPath: "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/" });
+        await k.init(analyzer);
+        return k;
+      })();
+    }
+    return kuroshiroInitPromise;
+  }
+
+  async function generateRomaji(japaneseText) {
+    if (!japaneseText || !japaneseText.trim()) return "";
+    try {
+      const k = await getKuroshiro();
+      let romaji = await k.convert(japaneseText, { to: "romaji", mode: "spaced", romajiSystem: "hepburn" });
+      romaji = romaji.replace(/\s+([.,!?、。！？])/g, "$1").trim();
+      return romaji.charAt(0).toUpperCase() + romaji.slice(1);
+    } catch (e) {
+      console.warn("Romaji generation failed", e);
+      return "";
+    }
+  }
+
+  // Self-healing fallback for cards that reach the review screen without a
+  // romaji (e.g. saved while offline, or created before this feature).
+  // Fires once per card per session, fills it in, and persists the result.
+  const romajiPending = new Set();
+  function ensureRomaji(card) {
+    if (card.romaji || romajiPending.has(card.id)) return;
+    romajiPending.add(card.id);
+    generateRomaji(card.front).then((romaji) => {
+      romajiPending.delete(card.id);
+      if (romaji) {
+        card.romaji = romaji;
+        saveData();
+        render();
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------
 
@@ -560,7 +615,7 @@
   }
 
   function blankDraft() {
-    return { editingId: null, front: "", back: "", tags: [], newTag: "", audioMode: "system", recState: "idle", recSec: 0, recording: null };
+    return { editingId: null, front: "", back: "", tags: [], newTag: "", audioMode: "system", recState: "idle", recSec: 0, recording: null, saving: false };
   }
 
   function openEditCard(card) {
@@ -575,6 +630,7 @@
       recState: isVoice ? "done" : "idle",
       recSec: 0,
       recording: isVoice ? card.audio.data : null,
+      saving: false,
     };
     ui.screen = "add";
     render();
@@ -601,9 +657,16 @@
     render();
   }
 
-  function saveCard() {
+  async function saveCard() {
     const d = ui.draft;
-    if (!d.front.trim() || !d.back.trim()) return;
+    if (!d.front.trim() || !d.back.trim() || d.saving) return;
+    d.saving = true;
+    render();
+
+    const front = d.front.trim();
+    const romaji = await generateRomaji(front);
+    if (ui.draft !== d) return; // user navigated away while this was generating
+
     const tags = d.tags.length ? d.tags.slice() : [UNTAGGED_TAG];
     const audio = d.audioMode === "system"
       ? { type: "system" }
@@ -614,7 +677,8 @@
     if (d.editingId) {
       const card = data.cards.find((c) => c.id === d.editingId);
       if (card) {
-        card.front = d.front.trim();
+        card.front = front;
+        card.romaji = romaji;
         card.back = d.back.trim();
         card.tags = tags;
         card.audio = audio;
@@ -622,8 +686,8 @@
     } else {
       data.cards.unshift({
         id: "c-" + Date.now(),
-        front: d.front.trim(),
-        romaji: "",
+        front,
+        romaji,
         back: d.back.trim(),
         tags: tags,
         stability: null,
@@ -726,14 +790,24 @@
       "div",
       {
         style: {
-          position: "sticky", bottom: "0", marginTop: "auto", display: "flex",
-          background: "rgba(245,244,237,.92)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-          borderTop: "1px solid #f0eee6", padding: "9px 12px calc(env(safe-area-inset-bottom, 0px) + 18px)",
+          position: "sticky", bottom: "0", marginTop: "auto",
+          padding: "0 14px calc(env(safe-area-inset-bottom, 0px) + 14px)",
         },
       },
-      item("home", "Review", '<path d="M3 10.5L12 3l9 7.5V21H3z"/>'),
-      item("browse", "Cards", '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18"/>'),
-      item("add", "Add", '<path d="M12 5v14M5 12h14"/>')
+      h(
+        "div",
+        {
+          style: {
+            display: "flex", padding: "10px 8px",
+            background: "rgba(250,249,245,.88)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+            border: "1px solid #f0eee6", borderRadius: "20px",
+            boxShadow: "0 8px 24px rgba(20,20,19,.1)",
+          },
+        },
+        item("home", "Review", '<path d="M3 10.5L12 3l9 7.5V21H3z"/>'),
+        item("browse", "Cards", '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18"/>'),
+        item("add", "Add", '<path d="M12 5v14M5 12h14"/>')
+      )
     );
   }
 
@@ -1012,6 +1086,7 @@
     );
 
     if (!s.flipped) {
+      ensureRomaji(c);
       flipZone.appendChild(
         h(
           "div",
@@ -1200,7 +1275,7 @@
   function screenAdd() {
     const d = ui.draft;
     const tags = allTags();
-    const canSave = d.front.trim() && d.back.trim();
+    const canSave = d.front.trim() && d.back.trim() && !d.saving;
 
     const audioModePanel = d.audioMode === "system"
       ? h(
@@ -1252,7 +1327,7 @@
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
         h("div", { class: "tap", style: { fontSize: "14px", color: "#5e5d59" }, onclick: cancelCardForm }, "Cancel"),
         h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, d.editingId ? "Edit card" : "New card"),
-        h("div", { class: canSave ? "tap" : "", style: { fontSize: "14px", fontWeight: "500", color: canSave ? "#c96442" : "#b0aea5" }, onclick: canSave ? saveCard : null }, "Save")
+        h("div", { class: canSave ? "tap" : "", style: { fontSize: "14px", fontWeight: "500", color: canSave ? "#c96442" : "#b0aea5" }, onclick: canSave ? saveCard : null }, d.saving ? "Saving…" : "Save")
       ),
 
       h(

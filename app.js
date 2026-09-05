@@ -790,24 +790,14 @@
       "div",
       {
         style: {
-          position: "sticky", bottom: "0", marginTop: "auto",
-          padding: "0 14px calc(env(safe-area-inset-bottom, 0px) + 14px)",
+          position: "sticky", bottom: "0", marginTop: "auto", display: "flex",
+          background: "rgba(245,244,237,.92)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+          borderTop: "1px solid #f0eee6", padding: "9px 12px calc(env(safe-area-inset-bottom, 0px) + 18px)",
         },
       },
-      h(
-        "div",
-        {
-          style: {
-            display: "flex", padding: "10px 8px",
-            background: "rgba(250,249,245,.88)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-            border: "1px solid #f0eee6", borderRadius: "20px",
-            boxShadow: "0 8px 24px rgba(20,20,19,.1)",
-          },
-        },
-        item("home", "Review", '<path d="M3 10.5L12 3l9 7.5V21H3z"/>'),
-        item("browse", "Cards", '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18"/>'),
-        item("add", "Add", '<path d="M12 5v14M5 12h14"/>')
-      )
+      item("home", "Review", '<path d="M3 10.5L12 3l9 7.5V21H3z"/>'),
+      item("browse", "Cards", '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18"/>'),
+      item("add", "Add", '<path d="M12 5v14M5 12h14"/>')
     );
   }
 

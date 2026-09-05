@@ -441,6 +441,21 @@
   // ---------------------------------------------------------------------
 
   let kuroshiroInitPromise = null;
+  // If the engine ever fails or hangs, stop trying for the rest of this
+  // session — better to save instantly without romaji than to make every
+  // future Save wait out another timeout on a connection/CDN that isn't
+  // going to work anyway. A fresh page load gets a fresh attempt.
+  let kuroshiroUnavailable = false;
+
+  function withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("timed out after " + ms + "ms")), ms);
+      promise.then(
+        (v) => { clearTimeout(timer); resolve(v); },
+        (e) => { clearTimeout(timer); reject(e); }
+      );
+    });
+  }
 
   function getKuroshiro() {
     if (!kuroshiroInitPromise) {
@@ -458,14 +473,15 @@
   }
 
   async function generateRomaji(japaneseText) {
-    if (!japaneseText || !japaneseText.trim()) return "";
+    if (!japaneseText || !japaneseText.trim() || kuroshiroUnavailable) return "";
     try {
-      const k = await getKuroshiro();
-      let romaji = await k.convert(japaneseText, { to: "romaji", mode: "spaced", romajiSystem: "hepburn" });
+      const k = await withTimeout(getKuroshiro(), 12000);
+      let romaji = await withTimeout(k.convert(japaneseText, { to: "romaji", mode: "spaced", romajiSystem: "hepburn" }), 5000);
       romaji = romaji.replace(/\s+([.,!?、。！？])/g, "$1").trim();
       return romaji.charAt(0).toUpperCase() + romaji.slice(1);
     } catch (e) {
-      console.warn("Romaji generation failed", e);
+      console.warn("Romaji generation unavailable — disabling for this session", e);
+      kuroshiroUnavailable = true;
       return "";
     }
   }

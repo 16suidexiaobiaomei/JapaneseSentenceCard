@@ -206,7 +206,7 @@
     sel: [], // selected tags on the tags screen
     query: "",
     filter: "All",
-    draft: { editingId: null, front: "", back: "", tags: [], newTag: "", audioMode: "system", recState: "idle", recSec: 0, recording: null },
+    draft: { editingId: null, front: "", romaji: "", back: "", tags: [], newTag: "", audioMode: "system", recState: "idle", recSec: 0, recording: null },
     profileDraft: { username: "", photo: null },
     auth: blankAuthState(),
     pwDraft: blankPasswordState(),

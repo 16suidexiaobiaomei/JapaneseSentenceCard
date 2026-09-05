@@ -432,76 +432,6 @@
     else if (ui.draft.recording) new Audio(ui.draft.recording).play().catch(() => {});
   }
 
-  // ---------------------------------------------------------------------
-  // Romaji (auto pronunciation) — kanji-aware, via a real Japanese
-  // morphological analyzer (kuromoji) rather than a plain kana lookup table,
-  // since most sentences here mix kanji with kana and a kanji's reading
-  // depends on context. The ~15MB dictionary is fetched lazily, only the
-  // first time a romaji is actually generated, and the browser caches it.
-  // ---------------------------------------------------------------------
-
-  let kuroshiroInitPromise = null;
-  // If the engine ever fails or hangs, stop trying for the rest of this
-  // session — better to save instantly without romaji than to make every
-  // future Save wait out another timeout on a connection/CDN that isn't
-  // going to work anyway. A fresh page load gets a fresh attempt.
-  let kuroshiroUnavailable = false;
-
-  function withTimeout(promise, ms) {
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("timed out after " + ms + "ms")), ms);
-      promise.then(
-        (v) => { clearTimeout(timer); resolve(v); },
-        (e) => { clearTimeout(timer); reject(e); }
-      );
-    });
-  }
-
-  function getKuroshiro() {
-    if (!kuroshiroInitPromise) {
-      kuroshiroInitPromise = (async () => {
-        if (typeof Kuroshiro === "undefined" || typeof KuromojiAnalyzer === "undefined") {
-          throw new Error("romaji engine did not load");
-        }
-        const k = new Kuroshiro();
-        const analyzer = new KuromojiAnalyzer({ dictPath: "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/" });
-        await k.init(analyzer);
-        return k;
-      })();
-    }
-    return kuroshiroInitPromise;
-  }
-
-  async function generateRomaji(japaneseText) {
-    if (!japaneseText || !japaneseText.trim() || kuroshiroUnavailable) return "";
-    try {
-      const k = await withTimeout(getKuroshiro(), 12000);
-      let romaji = await withTimeout(k.convert(japaneseText, { to: "romaji", mode: "spaced", romajiSystem: "hepburn" }), 5000);
-      romaji = romaji.replace(/\s+([.,!?、。！？])/g, "$1").trim();
-      return romaji.charAt(0).toUpperCase() + romaji.slice(1);
-    } catch (e) {
-      console.warn("Romaji generation unavailable — disabling for this session", e);
-      kuroshiroUnavailable = true;
-      return "";
-    }
-  }
-
-  // Self-healing fallback for cards that reach the review screen without a
-  // romaji (e.g. saved while offline, or created before this feature).
-  // Fires once per card per session, fills it in, and persists the result.
-  const romajiPending = new Set();
-  function ensureRomaji(card) {
-    if (card.romaji || romajiPending.has(card.id)) return;
-    romajiPending.add(card.id);
-    generateRomaji(card.front).then((romaji) => {
-      romajiPending.delete(card.id);
-      if (romaji) {
-        card.romaji = romaji;
-        saveData();
-        render();
-      }
-    });
-  }
 
   // ---------------------------------------------------------------------
   // Actions
@@ -631,7 +561,7 @@
   }
 
   function blankDraft() {
-    return { editingId: null, front: "", back: "", tags: [], newTag: "", audioMode: "system", recState: "idle", recSec: 0, recording: null, saving: false };
+    return { editingId: null, front: "", romaji: "", back: "", tags: [], newTag: "", audioMode: "system", recState: "idle", recSec: 0, recording: null };
   }
 
   function openEditCard(card) {
@@ -639,6 +569,7 @@
     ui.draft = {
       editingId: card.id,
       front: card.front,
+      romaji: card.romaji || "",
       back: card.back,
       tags: card.tags.slice(),
       newTag: "",
@@ -646,7 +577,6 @@
       recState: isVoice ? "done" : "idle",
       recSec: 0,
       recording: isVoice ? card.audio.data : null,
-      saving: false,
     };
     ui.screen = "add";
     render();
@@ -673,16 +603,12 @@
     render();
   }
 
-  async function saveCard() {
+  function saveCard() {
     const d = ui.draft;
-    if (!d.front.trim() || !d.back.trim() || d.saving) return;
-    d.saving = true;
-    render();
+    if (!d.front.trim() || !d.back.trim()) return;
 
     const front = d.front.trim();
-    const romaji = await generateRomaji(front);
-    if (ui.draft !== d) return; // user navigated away while this was generating
-
+    const romaji = d.romaji.trim();
     const tags = d.tags.length ? d.tags.slice() : [UNTAGGED_TAG];
     const audio = d.audioMode === "system"
       ? { type: "system" }
@@ -1092,7 +1018,6 @@
     );
 
     if (!s.flipped) {
-      ensureRomaji(c);
       flipZone.appendChild(
         h(
           "div",
@@ -1281,7 +1206,7 @@
   function screenAdd() {
     const d = ui.draft;
     const tags = allTags();
-    const canSave = d.front.trim() && d.back.trim() && !d.saving;
+    const canSave = d.front.trim() && d.back.trim();
 
     const audioModePanel = d.audioMode === "system"
       ? h(
@@ -1333,7 +1258,7 @@
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
         h("div", { class: "tap", style: { fontSize: "14px", color: "#5e5d59" }, onclick: cancelCardForm }, "Cancel"),
         h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, d.editingId ? "Edit card" : "New card"),
-        h("div", { class: canSave ? "tap" : "", style: { fontSize: "14px", fontWeight: "500", color: canSave ? "#c96442" : "#b0aea5" }, onclick: canSave ? saveCard : null }, d.saving ? "Saving…" : "Save")
+        h("div", { class: canSave ? "tap" : "", style: { fontSize: "14px", fontWeight: "500", color: canSave ? "#c96442" : "#b0aea5" }, onclick: canSave ? saveCard : null }, "Save")
       ),
 
       h(
@@ -1341,6 +1266,13 @@
         { style: { padding: "22px 20px 0" } },
         h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Front · sentence"),
         h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.front = e.target.value; render(); } }, d.front)
+      ),
+
+      h(
+        "div",
+        { style: { padding: "16px 20px 0" } },
+        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Romaji · optional"),
+        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" }, oninput: (e) => { d.romaji = e.target.value; render(); } })
       ),
 
       h(

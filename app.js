@@ -17,6 +17,10 @@
   const SUPABASE_URL = "https://asgyhietqpoamagitycs.supabase.co";
   const SUPABASE_KEY = "sb_publishable_oCqtHBphJuPnFgrK87K7PA_XwemlHSO";
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  // Confirmation-email links must redirect back into the app, not the bare
+  // GitHub Pages domain — passed explicitly so it doesn't depend on the
+  // Supabase dashboard's Site URL being set correctly.
+  const APP_URL = "https://16suidexiaobiaomei.github.io/JapaneseSentenceCard/";
 
   // ---------------------------------------------------------------------
   // FSRS (Free Spaced Repetition Scheduler) — v4.5 formulas & default weights.
@@ -969,11 +973,13 @@
     a.busy = true;
     a.error = "";
     render();
-    const { error } = await sb.auth.signUp({ email, password: a.password });
+    const { error } = await sb.auth.signUp({ email, password: a.password, options: { emailRedirectTo: APP_URL } });
     a.busy = false;
     if (error) { a.error = error.message; render(); return; }
     a.pendingEmail = email;
-    a.password = "";
+    // Keep the password (in memory only) — checkIfConfirmed() below uses it
+    // as a fallback sign-in if the confirmation link redirects somewhere
+    // that never hands the session back to this tab.
     a.mode = "verify";
     render();
   }
@@ -983,7 +989,9 @@
   // here with the session already established — supabase-js parses the
   // token straight out of the URL — so our boot check (or the
   // onAuthStateChange listener below) picks it up with no code to type.
-  // This button is a manual fallback for whenever that doesn't fire.
+  // This button is a manual fallback for whenever that doesn't fire: it
+  // also tries signing in directly, since clicking the link confirms the
+  // account server-side even if the redirect page itself failed to load.
   async function checkIfConfirmed() {
     const a = ui.auth;
     if (a.busy) return;
@@ -991,9 +999,15 @@
     a.error = "";
     render();
     const session = await getSessionSafe();
+    if (session) { a.busy = false; ui.auth = blankAuthState(); await enterApp(session); return; }
+    const { data, error } = await sb.auth.signInWithPassword({ email: a.pendingEmail, password: a.password });
     a.busy = false;
-    if (session) { ui.auth = blankAuthState(); await enterApp(session); return; }
-    a.error = "Not yet — open the link from the confirmation email first.";
+    if (data && data.session) { ui.auth = blankAuthState(); await enterApp(data.session); return; }
+    if (error && /confirm/i.test(error.message)) {
+      a.error = "Not confirmed yet — open the link from the confirmation email first.";
+    } else {
+      a.error = "Not yet — open the link from the confirmation email first.";
+    }
     render();
   }
 
@@ -1155,7 +1169,7 @@
 
     if (a.mode === "verify") {
       title = "Check your email.";
-      subtitle = "We sent a confirmation link to " + a.pendingEmail + ". Open it on this device to finish creating your account — this page will pick it up automatically.";
+      subtitle = "We sent a confirmation link to " + a.pendingEmail + ". Open it, then come back here and tap the button below — even if the link itself shows an error page, your account will already be confirmed and ready to use.";
       body = [
         authButton("I've confirmed — check again", "Checking…", true, a.busy, checkIfConfirmed),
         errorNode,

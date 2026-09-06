@@ -17,10 +17,10 @@
   const SUPABASE_URL = "https://asgyhietqpoamagitycs.supabase.co";
   const SUPABASE_KEY = "sb_publishable_oCqtHBphJuPnFgrK87K7PA_XwemlHSO";
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  // Confirmation-email links must redirect back into the app, not the bare
-  // GitHub Pages domain — passed explicitly so it doesn't depend on the
-  // Supabase dashboard's Site URL being set correctly.
-  const APP_URL = "https://16suidexiaobiaomei.github.io/JapaneseSentenceCard/";
+  // Confirmation-email links must redirect back into the app — passed
+  // explicitly so it doesn't depend on the Supabase dashboard's Site URL
+  // being set correctly.
+  const APP_URL = "https://japanese-sentence-card.vercel.app/";
 
   // ---------------------------------------------------------------------
   // FSRS (Free Spaced Repetition Scheduler) — v4.5 formulas & default weights.
@@ -206,7 +206,7 @@
     sel: [], // selected tags on the tags screen
     query: "",
     filter: "All",
-    draft: { editingId: null, front: "", romaji: "", back: "", tags: [], newTag: "", audioMode: "system", recState: "idle", recSec: 0, recording: null },
+    draft: blankDraft(), // function declaration is hoisted, so this runs fine here
     profileDraft: { username: "", photo: null },
     auth: blankAuthState(),
     pwDraft: blankPasswordState(),
@@ -795,7 +795,17 @@
   }
 
   function blankDraft() {
-    return { editingId: null, front: "", romaji: "", back: "", tags: [], newTag: "", audioMode: "system", recState: "idle", recSec: 0, recording: null };
+    return {
+      editingId: null, front: "", romaji: "", back: "", tags: [], newTag: "",
+      audioMode: "system", recState: "idle", recSec: 0, recording: null,
+      // Romaji auto-fill bookkeeping — see handleFrontBlur().
+      // romajiAuto: current d.romaji was set by us and hasn't been hand-edited,
+      // so the next auto-generation is free to silently replace it.
+      romajiAuto: true,
+      romajiSourceFront: "", // front text the last generation attempt used
+      romajiSuggestion: null, // pending suggestion when romajiAuto is false
+      romajiLoading: false,
+    };
   }
 
   function openEditCard(card) {
@@ -811,6 +821,12 @@
       recState: isVoice ? "done" : "idle",
       recSec: 0,
       recording: isVoice ? card.audio.data : null,
+      // An existing card's romaji is never silently overwritten — editing
+      // the front only ever surfaces a suggestion to accept or ignore.
+      romajiAuto: false,
+      romajiSourceFront: card.front,
+      romajiSuggestion: null,
+      romajiLoading: false,
     };
     ui.screen = "add";
     render();
@@ -820,6 +836,68 @@
     const wasEditing = !!ui.draft.editingId;
     ui.draft = blankDraft();
     go(wasEditing ? "browse" : "home");
+  }
+
+  // ---------------------------------------------------------------------
+  // Auto-romaji: generated server-side (Vercel function, /api/romaji) so
+  // the browser never runs the heavy tokenizer itself — that's what froze
+  // the page the first time this was attempted client-side. Online only;
+  // offline, the field just stays manual (see handleFrontBlur below).
+  // ---------------------------------------------------------------------
+
+  const JAPANESE_RE = /[぀-ヿ一-龯]/;
+
+  async function generateRomaji(text) {
+    try {
+      const res = await fetch("/api/romaji", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return typeof data.romaji === "string" ? data.romaji : null;
+    } catch (e) {
+      console.warn("romaji generation failed (offline?)", e);
+      return null;
+    }
+  }
+
+  async function handleFrontBlur() {
+    const d = ui.draft;
+    const front = d.front.trim();
+    if (!front || front === d.romajiSourceFront) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+
+    d.romajiSourceFront = front;
+    if (!JAPANESE_RE.test(front)) return; // nothing to convert
+
+    d.romajiLoading = true;
+    render();
+    const romaji = await generateRomaji(front);
+    d.romajiLoading = false;
+
+    // The user may have changed the front text again while we were
+    // waiting — a stale result for old text shouldn't land anywhere.
+    if (d.front.trim() !== front) { render(); return; }
+    if (romaji === null) { render(); return; }
+
+    if (d.romajiAuto) {
+      d.romaji = romaji;
+      d.romajiSuggestion = null;
+    } else if (romaji !== d.romaji) {
+      d.romajiSuggestion = romaji;
+    }
+    render();
+  }
+
+  function acceptRomajiSuggestion() {
+    const d = ui.draft;
+    if (!d.romajiSuggestion) return;
+    d.romaji = d.romajiSuggestion;
+    d.romajiAuto = true;
+    d.romajiSuggestion = null;
+    render();
   }
 
   function deleteCard() {
@@ -1740,14 +1818,26 @@
         "div",
         { style: { padding: "22px 20px 0" } },
         h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Front · sentence"),
-        h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.front = e.target.value; render(); } }, d.front)
+        h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.front = e.target.value; render(); }, onblur: handleFrontBlur }, d.front)
       ),
 
       h(
         "div",
         { style: { padding: "16px 20px 0" } },
-        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Romaji · optional"),
-        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" }, oninput: (e) => { d.romaji = e.target.value; render(); } })
+        h(
+          "div",
+          { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+          h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Romaji · optional"),
+          d.romajiLoading ? h("div", { style: { fontSize: "11px", color: "#b0aea5" } }, "Generating…") : null
+        ),
+        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" }, oninput: (e) => { d.romaji = e.target.value; d.romajiAuto = false; d.romajiSuggestion = null; render(); } }),
+        d.romajiSuggestion
+          ? h(
+              "div",
+              { class: "tap", style: { marginTop: "8px", fontSize: "12.5px", color: "#c96442" }, onclick: acceptRomajiSuggestion },
+              "Suggested: " + d.romajiSuggestion + " · Tap to use"
+            )
+          : null
       ),
 
       h(

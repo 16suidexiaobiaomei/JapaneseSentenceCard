@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/romaji.js": {
+      "maxDuration": 30,
+      "includeFiles": "node_modules/kuromoji/dict/**"
+    }
+  }
+}

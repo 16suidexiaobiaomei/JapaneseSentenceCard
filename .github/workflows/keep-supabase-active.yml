@@ -1,0 +1,30 @@
+name: Keep Supabase project active
+
+# Supabase's free tier pauses a project after 7 days with no API activity,
+# which requires manually un-pausing it from the dashboard. This just makes
+# one lightweight, read-only request per day so that never happens.
+#
+# Note: GitHub disables scheduled workflows after 60 days with no commits
+# to the repo (this run doesn't count as repo activity) — if development
+# on this app goes quiet for two+ months, re-enable it manually from the
+# Actions tab, or push any small commit to reset that clock.
+on:
+  schedule:
+    - cron: "17 6 * * *" # once daily, 06:17 UTC
+  workflow_dispatch: {} # lets you trigger a run manually from the Actions tab
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit the Supabase REST API
+        run: |
+          http_status=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://asgyhietqpoamagitycs.supabase.co/rest/v1/profiles?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}")
+          echo "Supabase responded with HTTP $http_status"
+          if [ "$http_status" -lt 200 ] || [ "$http_status" -ge 300 ]; then
+            echo "::error::Unexpected response from Supabase (HTTP $http_status)"
+            exit 1
+          fi

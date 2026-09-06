@@ -81,8 +81,10 @@ textarea:focus, input:focus { outline: none; border-color: var(--focus) !importa
    without an immediate :active cue, nothing visibly responds to a tap
    until the whole next screen has finished appearing. This fires on
    press-down/press-up (browser-native, before any of our JS runs), so
-   it's felt instantly regardless of how long the resulting update takes. */
-.tap { cursor: pointer; transition: opacity .1s ease; }
+   it's felt instantly regardless of how long the resulting update takes.
+   No transition — an eased fade is itself a small added delay, and the
+   whole point here is zero added latency, not a nicer-looking one. */
+.tap { cursor: pointer; }
 .tap:active { opacity: .6; }
 .row-hover:hover { border-color: var(--border-2) !important; }
 .chip:hover { filter: brightness(0.98); }

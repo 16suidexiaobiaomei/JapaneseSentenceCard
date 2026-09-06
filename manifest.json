@@ -1,6 +1,6 @@
 {
-  "name": "Sentence Cards",
-  "short_name": "Sentence Cards",
+  "name": "Japanese Sentence Card",
+  "short_name": "JSC",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f5f4ed",

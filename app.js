@@ -20,7 +20,7 @@
   // Confirmation-email links must redirect back into the app — passed
   // explicitly so it doesn't depend on the Supabase dashboard's Site URL
   // being set correctly.
-  const APP_URL = "https://japanese-sentence-card.vercel.app/";
+  const APP_URL = "https://japanesesentencecards.com/";
 
   // ---------------------------------------------------------------------
   // FSRS (Free Spaced Repetition Scheduler) — v4.5 formulas & default weights.
@@ -877,6 +877,7 @@
   }
 
   async function handleFrontBlur() {
+    flushRender(); // reconcile Save-button state etc. immediately on leaving the field
     const d = ui.draft;
     const front = d.front.trim();
     if (!front || front === d.romajiSourceFront) return;
@@ -1344,8 +1345,8 @@
     return h(
       "div",
       { style: { display: "flex", alignItems: "center", gap: "9px" } },
-      h("div", { style: { width: "26px", height: "26px", borderRadius: "8px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "15px", fontWeight: "600" } }, "S"),
-      h("div", { style: { fontFamily: "var(--serif)", fontSize: "16px", fontWeight: "500", color: "#141413", letterSpacing: ".1px" } }, "Sentence cards")
+      h("div", { style: { height: "26px", padding: "0 7px", borderRadius: "8px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "12px", fontWeight: "600", letterSpacing: ".02em" } }, "JSC"),
+      h("div", { style: { fontFamily: "var(--serif)", fontSize: "16px", fontWeight: "500", color: "#141413", letterSpacing: ".1px" } }, "Japanese Sentence Card")
     );
   }
 
@@ -1363,6 +1364,7 @@
       "data-field": dataField, type, value, placeholder,
       style: { width: "100%", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "15px", color: "#141413" },
       oninput: onInput,
+      onblur: flushRender,
     });
   }
 
@@ -1396,9 +1398,9 @@
       title = "Create your account.";
       subtitle = "Your cards, tags and review history will sync to any device you log into.";
       body = [
-        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; if (!e.isComposing) render(); }),
+        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; if (!e.isComposing) scheduleRender(); }),
         h("div", { style: { height: "10px" } }),
-        authField("authPassword", "password", a.password, "Password (min 6 characters)", (e) => { a.password = e.target.value; if (!e.isComposing) render(); }),
+        authField("authPassword", "password", a.password, "Password (min 6 characters)", (e) => { a.password = e.target.value; if (!e.isComposing) scheduleRender(); }),
         authButton("Create account", "Creating…", !!(a.email.trim() && a.password), a.busy, signUp),
         errorNode,
         h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
@@ -1410,9 +1412,9 @@
       title = "Welcome back.";
       subtitle = "Log in to pick up right where you left off.";
       body = [
-        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; if (!e.isComposing) render(); }),
+        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; if (!e.isComposing) scheduleRender(); }),
         h("div", { style: { height: "10px" } }),
-        authField("authPassword", "password", a.password, "Password", (e) => { a.password = e.target.value; if (!e.isComposing) render(); }),
+        authField("authPassword", "password", a.password, "Password", (e) => { a.password = e.target.value; if (!e.isComposing) scheduleRender(); }),
         authButton("Log in", "Logging in…", !!(a.email.trim() && a.password), a.busy, logIn),
         errorNode,
         h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
@@ -1466,8 +1468,8 @@
         h(
           "div",
           { style: { display: "flex", alignItems: "center", gap: "9px" } },
-          h("div", { style: { width: "26px", height: "26px", borderRadius: "8px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "15px", fontWeight: "600" } }, "S"),
-          h("div", { style: { fontFamily: "var(--serif)", fontSize: "16px", fontWeight: "500", color: "#141413", letterSpacing: ".1px" } }, "Sentence cards")
+          h("div", { style: { height: "26px", padding: "0 7px", borderRadius: "8px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "12px", fontWeight: "600", letterSpacing: ".02em" } }, "JSC"),
+          h("div", { style: { fontFamily: "var(--serif)", fontSize: "16px", fontWeight: "500", color: "#141413", letterSpacing: ".1px" } }, "Japanese Sentence Card")
         ),
         h(
           "div",
@@ -1839,7 +1841,7 @@
         "div",
         { style: { margin: "14px 20px 0", display: "flex", alignItems: "center", gap: "10px", padding: "11px 14px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "12px" } },
         icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.5-4.5"/>', 15, "#b0aea5"),
-        h("input", { "data-field": "query", value: ui.query, placeholder: "Search sentence, note or tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14px", color: "#141413" }, oninput: (e) => { ui.query = e.target.value; if (!e.isComposing) render(); } })
+        h("input", { "data-field": "query", value: ui.query, placeholder: "Search sentence, note or tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14px", color: "#141413" }, oninput: (e) => { ui.query = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: flushRender })
       ),
 
       h(
@@ -1954,7 +1956,7 @@
         "div",
         { style: { padding: "22px 20px 0" } },
         h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Front · sentence"),
-        h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.front = e.target.value; if (!e.isComposing) render(); }, onblur: handleFrontBlur }, d.front)
+        h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.front = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: handleFrontBlur }, d.front)
       ),
 
       h(
@@ -1966,7 +1968,7 @@
           h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Romaji · optional"),
           d.romajiLoading ? h("div", { style: { fontSize: "11px", color: "#b0aea5" } }, "Generating…") : null
         ),
-        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" }, oninput: (e) => { d.romaji = e.target.value; d.romajiAuto = false; d.romajiSuggestion = null; if (!e.isComposing) render(); } }),
+        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" }, oninput: (e) => { d.romaji = e.target.value; d.romajiAuto = false; d.romajiSuggestion = null; if (!e.isComposing) scheduleRender(); }, onblur: flushRender }),
         d.romajiSuggestion
           ? h(
               "div",
@@ -1980,7 +1982,7 @@
         "div",
         { style: { padding: "20px 20px 0" } },
         h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Back · note"),
-        h("textarea", { "data-field": "back", rows: "2", placeholder: "I swam yesterday.", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "17px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.back = e.target.value; if (!e.isComposing) render(); } }, d.back)
+        h("textarea", { "data-field": "back", rows: "2", placeholder: "I swam yesterday.", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "17px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.back = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: flushRender }, d.back)
       ),
 
       h(
@@ -2003,7 +2005,7 @@
         h(
           "div",
           { style: { marginTop: "10px", display: "flex", gap: "8px" } },
-          h("input", { "data-field": "newTag", value: d.newTag, placeholder: "New tag", style: { flex: "1", padding: "11px 14px", background: "#faf9f5", border: "1px dashed #ddd8c8", borderRadius: "9999px", fontSize: "13px", color: "#141413" }, oninput: (e) => { d.newTag = e.target.value; if (!e.isComposing) render(); }, onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addNewTag(); } } }),
+          h("input", { "data-field": "newTag", value: d.newTag, placeholder: "New tag", style: { flex: "1", padding: "11px 14px", background: "#faf9f5", border: "1px dashed #ddd8c8", borderRadius: "9999px", fontSize: "13px", color: "#141413" }, oninput: (e) => { d.newTag = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: flushRender, onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addNewTag(); } } }),
           h("div", { class: "tap", style: { padding: "11px 18px", borderRadius: "9999px", background: "#f0eee6", color: "#141413", fontSize: "13px" }, onclick: addNewTag }, "Add")
         )
       ),
@@ -2091,7 +2093,8 @@
         h("input", {
           "data-field": "profileUsername", value: d.username, placeholder: "Your username",
           style: { marginTop: "10px", width: "100%", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "19px", color: "#141413" },
-          oninput: (e) => { d.username = e.target.value; if (!e.isComposing) render(); },
+          oninput: (e) => { d.username = e.target.value; if (!e.isComposing) scheduleRender(); },
+          onblur: flushRender,
         })
       ),
 
@@ -2102,12 +2105,14 @@
         h("input", {
           "data-field": "pwNew", type: "password", value: ui.pwDraft.password, placeholder: "New password",
           style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" },
-          oninput: (e) => { ui.pwDraft.password = e.target.value; if (!e.isComposing) render(); },
+          oninput: (e) => { ui.pwDraft.password = e.target.value; if (!e.isComposing) scheduleRender(); },
+          onblur: flushRender,
         }),
         h("input", {
           "data-field": "pwConfirm", type: "password", value: ui.pwDraft.confirm, placeholder: "Confirm new password",
           style: { marginTop: "8px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" },
-          oninput: (e) => { ui.pwDraft.confirm = e.target.value; if (!e.isComposing) render(); },
+          oninput: (e) => { ui.pwDraft.confirm = e.target.value; if (!e.isComposing) scheduleRender(); },
+          onblur: flushRender,
         }),
         ui.pwDraft.error ? h("div", { style: { marginTop: "8px", fontSize: "12px", color: "#c96442" } }, ui.pwDraft.error) : null,
         h(
@@ -2130,6 +2135,25 @@
   // ---------------------------------------------------------------------
   // Render dispatch
   // ---------------------------------------------------------------------
+
+  // render() rebuilds the entire DOM tree (see the innerHTML reset below),
+  // including destroying and recreating whatever text field is focused.
+  // Calling that on every single keystroke made typing feel sluggish and,
+  // worse, could interrupt the browser's native key-repeat when holding
+  // Backspace — the field kept getting torn down and refocused mid-repeat.
+  // scheduleRender() coalesces bursts of typing/holding a key into one
+  // render shortly after they pause, while state itself (d.front, etc.)
+  // still updates every keystroke — flushRender() forces it immediately
+  // for moments (like leaving the field) that want no lag at all.
+  let renderDebounceTimer = null;
+  function scheduleRender() {
+    clearTimeout(renderDebounceTimer);
+    renderDebounceTimer = setTimeout(() => { renderDebounceTimer = null; render(); }, 200);
+  }
+  function flushRender() {
+    if (renderDebounceTimer) { clearTimeout(renderDebounceTimer); renderDebounceTimer = null; }
+    render();
+  }
 
   function render() {
     const root = document.getElementById("app");

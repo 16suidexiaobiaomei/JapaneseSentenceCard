@@ -1398,9 +1398,9 @@
       title = "Create your account.";
       subtitle = "Your cards, tags and review history will sync to any device you log into.";
       body = [
-        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; if (!e.isComposing) scheduleRender(); }),
+        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; }),
         h("div", { style: { height: "10px" } }),
-        authField("authPassword", "password", a.password, "Password (min 6 characters)", (e) => { a.password = e.target.value; if (!e.isComposing) scheduleRender(); }),
+        authField("authPassword", "password", a.password, "Password (min 6 characters)", (e) => { a.password = e.target.value; }),
         authButton("Create account", "Creating…", !!(a.email.trim() && a.password), a.busy, signUp),
         errorNode,
         h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
@@ -1412,9 +1412,9 @@
       title = "Welcome back.";
       subtitle = "Log in to pick up right where you left off.";
       body = [
-        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; if (!e.isComposing) scheduleRender(); }),
+        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; }),
         h("div", { style: { height: "10px" } }),
-        authField("authPassword", "password", a.password, "Password", (e) => { a.password = e.target.value; if (!e.isComposing) scheduleRender(); }),
+        authField("authPassword", "password", a.password, "Password", (e) => { a.password = e.target.value; }),
         authButton("Log in", "Logging in…", !!(a.email.trim() && a.password), a.busy, logIn),
         errorNode,
         h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
@@ -1829,7 +1829,7 @@
       const okFilter = ui.filter === "All"
         || (ui.filter === RECENT_TAG ? Date.now() - x.createdAt <= RECENT_MS : x.tags.includes(ui.filter));
       return okQ && okFilter;
-    });
+    }).sort((a, b) => b.createdAt - a.createdAt);
 
     return h(
       "div",
@@ -1956,7 +1956,7 @@
         "div",
         { style: { padding: "22px 20px 0" } },
         h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Front · sentence"),
-        h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.front = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: handleFrontBlur }, d.front)
+        h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.front = e.target.value; }, onblur: handleFrontBlur }, d.front)
       ),
 
       h(
@@ -1968,7 +1968,7 @@
           h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Romaji · optional"),
           d.romajiLoading ? h("div", { style: { fontSize: "11px", color: "#b0aea5" } }, "Generating…") : null
         ),
-        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" }, oninput: (e) => { d.romaji = e.target.value; d.romajiAuto = false; d.romajiSuggestion = null; if (!e.isComposing) scheduleRender(); }, onblur: flushRender }),
+        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" }, oninput: (e) => { d.romaji = e.target.value; d.romajiAuto = false; d.romajiSuggestion = null; }, onblur: flushRender }),
         d.romajiSuggestion
           ? h(
               "div",
@@ -1982,7 +1982,7 @@
         "div",
         { style: { padding: "20px 20px 0" } },
         h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Back · note"),
-        h("textarea", { "data-field": "back", rows: "2", placeholder: "I swam yesterday.", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "17px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.back = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: flushRender }, d.back)
+        h("textarea", { "data-field": "back", rows: "2", placeholder: "I swam yesterday.", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "17px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.back = e.target.value; }, onblur: flushRender }, d.back)
       ),
 
       h(
@@ -2005,7 +2005,7 @@
         h(
           "div",
           { style: { marginTop: "10px", display: "flex", gap: "8px" } },
-          h("input", { "data-field": "newTag", value: d.newTag, placeholder: "New tag", style: { flex: "1", padding: "11px 14px", background: "#faf9f5", border: "1px dashed #ddd8c8", borderRadius: "9999px", fontSize: "13px", color: "#141413" }, oninput: (e) => { d.newTag = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: flushRender, onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addNewTag(); } } }),
+          h("input", { "data-field": "newTag", value: d.newTag, placeholder: "New tag", style: { flex: "1", padding: "11px 14px", background: "#faf9f5", border: "1px dashed #ddd8c8", borderRadius: "9999px", fontSize: "13px", color: "#141413" }, oninput: (e) => { d.newTag = e.target.value; }, onblur: flushRender, onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addNewTag(); } } }),
           h("div", { class: "tap", style: { padding: "11px 18px", borderRadius: "9999px", background: "#f0eee6", color: "#141413", fontSize: "13px" }, onclick: addNewTag }, "Add")
         )
       ),
@@ -2093,7 +2093,7 @@
         h("input", {
           "data-field": "profileUsername", value: d.username, placeholder: "Your username",
           style: { marginTop: "10px", width: "100%", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "19px", color: "#141413" },
-          oninput: (e) => { d.username = e.target.value; if (!e.isComposing) scheduleRender(); },
+          oninput: (e) => { d.username = e.target.value; },
           onblur: flushRender,
         })
       ),
@@ -2105,13 +2105,13 @@
         h("input", {
           "data-field": "pwNew", type: "password", value: ui.pwDraft.password, placeholder: "New password",
           style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" },
-          oninput: (e) => { ui.pwDraft.password = e.target.value; if (!e.isComposing) scheduleRender(); },
+          oninput: (e) => { ui.pwDraft.password = e.target.value; },
           onblur: flushRender,
         }),
         h("input", {
           "data-field": "pwConfirm", type: "password", value: ui.pwDraft.confirm, placeholder: "Confirm new password",
           style: { marginTop: "8px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" },
-          oninput: (e) => { ui.pwDraft.confirm = e.target.value; if (!e.isComposing) scheduleRender(); },
+          oninput: (e) => { ui.pwDraft.confirm = e.target.value; },
           onblur: flushRender,
         }),
         ui.pwDraft.error ? h("div", { style: { marginTop: "8px", fontSize: "12px", color: "#c96442" } }, ui.pwDraft.error) : null,
@@ -2137,18 +2137,22 @@
   // ---------------------------------------------------------------------
 
   // render() rebuilds the entire DOM tree (see the innerHTML reset below),
-  // including destroying and recreating whatever text field is focused.
-  // Calling that on every single keystroke made typing feel sluggish and,
-  // worse, could interrupt the browser's native key-repeat when holding
-  // Backspace — the field kept getting torn down and refocused mid-repeat.
-  // scheduleRender() coalesces bursts of typing/holding a key into one
-  // render shortly after they pause, while state itself (d.front, etc.)
-  // still updates every keystroke — flushRender() forces it immediately
-  // for moments (like leaving the field) that want no lag at all.
+  // including destroying and recreating whatever text field is focused —
+  // slow, and disruptive enough to native input handling (key-repeat, IME
+  // composition, mobile autocorrect) that a short debounce still wasn't
+  // enough: ordinary typing has plenty of >200ms gaps between keystrokes,
+  // so it kept firing mid-sentence anyway. Free-text fields (front, back,
+  // tags, profile, auth) now don't call render() from oninput at all —
+  // the browser already shows what you typed with zero help from us;
+  // flushRender() reconciles everything else (Save button state, etc.)
+  // once you leave the field. scheduleRender() remains only for the
+  // search box, where live-updating the results list as you type is the
+  // actual point — a search query is short enough that a real debounce
+  // rarely lands mid-burst the way it did for longer free-form typing.
   let renderDebounceTimer = null;
   function scheduleRender() {
     clearTimeout(renderDebounceTimer);
-    renderDebounceTimer = setTimeout(() => { renderDebounceTimer = null; render(); }, 200);
+    renderDebounceTimer = setTimeout(() => { renderDebounceTimer = null; render(); }, 400);
   }
   function flushRender() {
     if (renderDebounceTimer) { clearTimeout(renderDebounceTimer); renderDebounceTimer = null; }

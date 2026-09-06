@@ -210,11 +210,12 @@
     profileDraft: { username: "", photo: null },
     auth: blankAuthState(),
     pwDraft: blankPasswordState(),
-    activityRange: "year", // "year" | "30d" | "7d"
+    activityRange: "all", // "all" | "30d" | "7d"
     tagsEditMode: false,
     session: null, // { queue: [ids], qi, flipped, tags, results }
     cardSavedFlash: false,
     cropModal: null, // { imgSrc, natW, natH, zoom, offsetX, offsetY } while cropping a new profile photo
+    heatmapTip: null, // { key, count } — the heatmap day currently hovered/tapped
   };
 
   let recTimer = null;
@@ -284,10 +285,14 @@
     return best;
   }
 
-  // Activity range toggle: "year" | "30d" | "7d" — how many days back each covers.
-  const ACTIVITY_RANGE_DAYS = { year: 370, "30d": 29, "7d": 6 };
+  // Activity range toggle: "all" | "30d" | "7d" — how many days back each
+  // covers for the three stat tiles (Cards/Reviewed/Active days). "all"
+  // means every day ever recorded for this account, not a rolling year —
+  // Infinity is handled specially in rangeStart() below.
+  const ACTIVITY_RANGE_DAYS = { all: Infinity, "30d": 29, "7d": 6 };
 
   function rangeStart(daysBack) {
+    if (daysBack === Infinity) return new Date(0);
     const from = new Date();
     from.setDate(from.getDate() - daysBack);
     from.setHours(0, 0, 0, 0);
@@ -321,8 +326,19 @@
     return h + "h " + m + "m";
   }
 
+  // The heatmap's own visible span — independent of the stat-tile range
+  // toggle above it (which can go all the way back to "all"). ~6 months:
+  // 26 full weeks, so the grid never has a ragged leading week. Recomputed
+  // from "today" on every render (see below), so the window is inherently
+  // rolling — today's column is always the rightmost, and the oldest day
+  // simply stops being included as time passes. Nothing is ever deleted
+  // from the database; this only changes how much of it gets drawn.
+  const HEATMAP_DAYS = 26 * 7;
+
   // A GitHub-style grid of weeks (Sun-Sat columns) covering the last `daysBack`
-  // days, ending today.
+  // days, ending today. All date math here uses local-calendar Date methods
+  // (setDate/getDay/setHours), never raw UTC or millisecond arithmetic, so
+  // it stays correct across DST transitions and in the user's own timezone.
   function heatmapWeeks(daysBack) {
     const end = new Date();
     end.setHours(0, 0, 0, 0);
@@ -334,7 +350,7 @@
     while (d <= end) {
       const week = [];
       for (let dow = 0; dow < 7; dow++) {
-        week.push(d > end ? null : { count: data.reviewLog[dateKey(d)] || 0 });
+        week.push(d > end ? null : { count: data.reviewLog[dateKey(d)] || 0, key: dateKey(d) });
         d.setDate(d.getDate() + 1);
       }
       weeks.push(week);
@@ -352,6 +368,13 @@
   }
 
   const HEAT_COLORS = ["#f0eee6", "#f1d7bc", "#e6a874", "#c96442", "#7a3018"];
+
+  function heatmapTipText(tip) {
+    if (!tip) return "Hover or tap a day to see reviews";
+    const label = new Date(tip.key + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const n = tip.count === 1 ? "1 review" : tip.count + " reviews";
+    return n + " on " + label;
+  }
 
   function dueLabel(card) {
     const now = Date.now();
@@ -467,7 +490,7 @@
     const session = await getSessionSafe();
     if (!session) return;
     try {
-      await sb.from("profiles").upsert({ id: session.user.id, username: data.profile.username || null, photo: data.profile.photo });
+      await sb.from("profiles").upsert({ id: session.user.id, username: data.profile.username || null, photo: data.profile.photo, total_active_ms: data.totalActiveMs });
     } catch (e) {
       console.warn("pushProfile failed (offline?)", e);
     }
@@ -510,6 +533,15 @@
 
       if (remoteProfile) {
         data.profile = { username: remoteProfile.username || "", photo: remoteProfile.photo || null };
+        // "Time in app" is tracked per-device, so two devices naturally
+        // drift apart — converge both to whichever has accumulated more,
+        // same idea as the review-log merge below. Not a true sum across
+        // devices (that would need real delta-tracking, overkill for a
+        // vanity stat) — just "never show a lower number than any device
+        // has already seen."
+        const remoteMs = remoteProfile.total_active_ms || 0;
+        if (remoteMs > data.totalActiveMs) data.totalActiveMs = remoteMs;
+        else if (data.totalActiveMs > remoteMs) await pushProfile();
       }
 
       const remoteCounts = {};
@@ -1451,7 +1483,7 @@
     const tags = allTags();
     const due = dueCards(null);
     const rangeDays = ACTIVITY_RANGE_DAYS[ui.activityRange];
-    const weeks = heatmapWeeks(ACTIVITY_RANGE_DAYS.year); // heatmap always shows the full year; only the tiles respect the range toggle
+    const weeks = heatmapWeeks(HEATMAP_DAYS); // heatmap always shows ~6 months; only the tiles respect the range toggle
     const maxCount = Math.max(1, ...weeks.flat().filter(Boolean).map((c) => c.count));
 
     const dueLine = due.length
@@ -1543,7 +1575,7 @@
           h(
             "div",
             { style: { display: "flex", gap: "4px", background: "#f0eee6", padding: "3px", borderRadius: "9999px" } },
-            ...[["year", "All"], ["30d", "30d"], ["7d", "7d"]].map(([key, label]) => {
+            ...[["all", "All"], ["30d", "30d"], ["7d", "7d"]].map(([key, label]) => {
               const on = ui.activityRange === key;
               return h(
                 "div",
@@ -1565,9 +1597,11 @@
           statTile("Time in app", formatDuration(data.totalActiveMs))
         ),
 
+        h("div", { style: { marginTop: "14px", fontSize: "12px", color: "#5e5d59" } }, heatmapTipText(ui.heatmapTip)),
+
         h(
           "div",
-          { class: "scrollx", "data-remember-scroll": "home-heatmap", "data-scroll-to-end": "true", style: { marginTop: "16px", alignItems: "flex-start" } },
+          { class: "scrollx", "data-remember-scroll": "home-heatmap", "data-scroll-to-end": "true", style: { marginTop: "8px", alignItems: "flex-start" } },
           ...weeks.map((week) =>
             h(
               "div",
@@ -1577,7 +1611,14 @@
                   style: {
                     width: "10px", height: "10px", borderRadius: "2px",
                     background: cell ? HEAT_COLORS[heatLevel(cell.count, maxCount)] : "transparent",
+                    cursor: cell ? "pointer" : "default",
                   },
+                  onmouseenter: cell ? () => { ui.heatmapTip = { key: cell.key, count: cell.count }; render(); } : null,
+                  onmouseleave: cell ? () => { ui.heatmapTip = null; render(); } : null,
+                  onclick: cell ? () => {
+                    ui.heatmapTip = (ui.heatmapTip && ui.heatmapTip.key === cell.key) ? null : { key: cell.key, count: cell.count };
+                    render();
+                  } : null,
                 })
               )
             )
@@ -2254,4 +2295,5 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") syncNow();
   });
+
 })();

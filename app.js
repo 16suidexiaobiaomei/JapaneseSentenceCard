@@ -479,7 +479,10 @@
     const session = await getSessionSafe();
     if (!session) return;
     try {
-      const { error } = await sb.from("cards").delete().eq("id", id).eq("user_id", session.user.id);
+      // Soft delete (see syncNow()'s merge logic for why): a device that
+      // hasn't heard about this deletion yet needs to be able to tell "this
+      // card was removed" apart from "this card doesn't exist here yet".
+      const { error } = await sb.from("cards").update({ deleted_at: new Date().toISOString() }).eq("id", id).eq("user_id", session.user.id);
       if (!error) data.pendingDeletes = data.pendingDeletes.filter((x) => x !== id);
     } catch (e) {
       console.warn("pushDeleteCard failed (offline?)", e);
@@ -559,13 +562,17 @@
         if (mergedLog[day] > (remoteCounts[day] || 0)) await pushReviewDay(day);
       }
 
-      const remoteList = (remoteCards || []).filter((r) => !data.pendingDeletes.includes(r.id));
+      // Rows this device is itself mid-deleting shouldn't count toward
+      // "does the server have anything" — otherwise deleting your only
+      // card, offline, could momentarily look like a brand-new account.
+      const remoteRows = remoteCards || [];
+      const remoteRowsExcludingOwnPendingDeletes = remoteRows.filter((r) => !data.pendingDeletes.includes(r.id));
 
-      if (remoteList.length === 0 && data.cards.length === 0) {
+      if (remoteRowsExcludingOwnPendingDeletes.length === 0 && data.cards.length === 0) {
         // Brand new account, nothing local either: start with the example deck.
         data.cards = makeSeedData().cards;
         await pushCardsBulk(data.cards);
-      } else if (remoteList.length === 0) {
+      } else if (remoteRowsExcludingOwnPendingDeletes.length === 0) {
         // Brand new account with existing local cards: claim them as the initial cloud set.
         await pushCardsBulk(data.cards);
       } else {
@@ -573,8 +580,13 @@
         const merged = [];
         const toPush = [];
         const seenIds = new Set();
-        for (const row of remoteList) {
+        // Walk every remote row, including tombstoned ones (deleted_at
+        // set) — a card can only be told apart from "never synced from
+        // this device" if the server still remembers it was deleted.
+        for (const row of remoteRows) {
           seenIds.add(row.id);
+          if (data.pendingDeletes.includes(row.id)) continue; // we're deleting this ourselves; don't resurrect it mid-flight
+          if (row.deleted_at) continue; // tombstoned elsewhere — stays gone, no matter what this device's stale copy looks like
           const localCard = localById.get(row.id);
           if (!localCard) { merged.push(rowToCard(row)); continue; }
           const remoteUpdated = new Date(row.updated_at).getTime();

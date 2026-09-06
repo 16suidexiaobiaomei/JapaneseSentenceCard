@@ -228,6 +228,11 @@
   // back to its start. Keyed by a "data-remember-scroll" attribute value.
   const scrollMemory = {};
 
+  // Only fade in the new content when actually navigating to a different
+  // screen — not on every render() within the same screen (a filter tap,
+  // a debounced text flush, etc.), which would make it flash constantly.
+  let lastAnimatedScreen = null;
+
   // ---------------------------------------------------------------------
   // Derived helpers
   // ---------------------------------------------------------------------
@@ -2234,6 +2239,9 @@
       case "profile": content = screenProfile(); break;
       default: content = screenHome();
     }
+    if (ui.screen !== lastAnimatedScreen) content.classList.add("anim-in");
+    lastAnimatedScreen = ui.screen;
+
     phone.appendChild(content);
     if (ui.cropModal) phone.appendChild(screenCropModal());
     root.appendChild(phone);
@@ -2295,5 +2303,4 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") syncNow();
   });
-
 })();

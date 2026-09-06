@@ -26,6 +26,7 @@ html, body {
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
   height: 100%;
+  -webkit-tap-highlight-color: transparent; /* replaced by the .tap:active press effect below */
 }
 
 body { min-height: 100dvh; }
@@ -76,8 +77,13 @@ textarea:focus, input:focus { outline: none; border-color: var(--focus) !importa
 /* dark screens (review / done) */
 .phone.dark { background: var(--dark); }
 
-/* interactive rows/tiles */
-.tap { cursor: pointer; }
+/* interactive rows/tiles — the app rebuilds on every state change, so
+   without an immediate :active cue, nothing visibly responds to a tap
+   until the whole next screen has finished appearing. This fires on
+   press-down/press-up (browser-native, before any of our JS runs), so
+   it's felt instantly regardless of how long the resulting update takes. */
+.tap { cursor: pointer; transition: opacity .1s ease; }
+.tap:active { opacity: .6; }
 .row-hover:hover { border-color: var(--border-2) !important; }
 .chip:hover { filter: brightness(0.98); }
 

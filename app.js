@@ -213,6 +213,8 @@
     activityRange: "year", // "year" | "30d" | "7d"
     tagsEditMode: false,
     session: null, // { queue: [ids], qi, flipped, tags, results }
+    cardSavedFlash: false,
+    cropModal: null, // { imgSrc, natW, natH, zoom, offsetX, offsetY } while cropping a new profile photo
   };
 
   let recTimer = null;
@@ -510,9 +512,20 @@
         data.profile = { username: remoteProfile.username || "", photo: remoteProfile.photo || null };
       }
 
+      const remoteCounts = {};
+      (remoteLog || []).forEach((r) => { remoteCounts[r.day] = r.count; });
       const mergedLog = Object.assign({}, data.reviewLog);
       (remoteLog || []).forEach((r) => { mergedLog[r.day] = Math.max(mergedLog[r.day] || 0, r.count); });
       data.reviewLog = mergedLog;
+
+      // A day whose local count is still higher than what the server has
+      // means an earlier pushReviewDay() never made it through (offline at
+      // the time, tab closed mid-request, etc.) — retry it here so a streak
+      // recorded on one device isn't silently missing on another. Unlike
+      // cards, review-log pushes had no retry path before this.
+      for (const day of Object.keys(mergedLog)) {
+        if (mergedLog[day] > (remoteCounts[day] || 0)) await pushReviewDay(day);
+      }
 
       const remoteList = (remoteCards || []).filter((r) => !data.pendingDeletes.includes(r.id));
 
@@ -962,11 +975,20 @@
       data.cards.unshift(savedCard);
     }
     saveData();
+    const wasNewCard = !d.editingId;
     ui.draft = blankDraft();
-    ui.screen = "browse";
-    ui.filter = "All";
-    ui.query = "";
-    render();
+    if (wasNewCard) {
+      // Adding cards is usually a batch activity — stay put so the next
+      // one can start right away instead of re-navigating back here.
+      ui.cardSavedFlash = true;
+      render();
+      setTimeout(() => { ui.cardSavedFlash = false; render(); }, 1500);
+    } else {
+      ui.screen = "browse";
+      ui.filter = "All";
+      ui.query = "";
+      render();
+    }
     if (savedCard) pushCard(savedCard);
   }
 
@@ -1126,20 +1148,134 @@
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const size = 200;
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      const scale = Math.max(size / img.width, size / img.height);
-      const w = img.width * scale, h = img.height * scale;
-      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-      URL.revokeObjectURL(url);
-      ui.profileDraft.photo = canvas.toDataURL("image/jpeg", 0.85);
+      ui.cropModal = { imgSrc: url, natW: img.naturalWidth, natH: img.naturalHeight, zoom: 1, offsetX: 0, offsetY: 0 };
       render();
     };
     img.onerror = () => URL.revokeObjectURL(url);
     img.src = url;
+  }
+
+  // ---------------------------------------------------------------------
+  // Photo crop modal — drag to reposition, slider to zoom, before it's
+  // committed to ui.profileDraft.photo. Drag/zoom updates the DOM directly
+  // (bypassing render(), which rebuilds the whole tree on every call) so
+  // dragging stays smooth; render() only runs once the gesture ends.
+  // ---------------------------------------------------------------------
+
+  const CROP_FRAME = 260;
+  const CROP_OUTPUT = 200;
+
+  function cropLayout(m) {
+    const baseScale = Math.max(CROP_FRAME / m.natW, CROP_FRAME / m.natH);
+    const scale = baseScale * m.zoom;
+    const width = m.natW * scale, height = m.natH * scale;
+    const left = CROP_FRAME / 2 - width / 2 + m.offsetX;
+    const top = CROP_FRAME / 2 - height / 2 + m.offsetY;
+    return { left, top, width, height, baseScale };
+  }
+
+  function clampCropOffset(m, ox, oy) {
+    const { width, height } = cropLayout(Object.assign({}, m, { offsetX: 0, offsetY: 0 }));
+    const maxX = Math.max(0, (width - CROP_FRAME) / 2);
+    const maxY = Math.max(0, (height - CROP_FRAME) / 2);
+    return { offsetX: Math.min(maxX, Math.max(-maxX, ox)), offsetY: Math.min(maxY, Math.max(-maxY, oy)) };
+  }
+
+  function paintCropImg() {
+    const m = ui.cropModal;
+    if (!m) return;
+    const el = document.querySelector('[data-field="cropImg"]');
+    if (!el) return;
+    const { left, top, width, height } = cropLayout(m);
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+    el.style.width = width + "px";
+    el.style.height = height + "px";
+  }
+
+  function startCropDrag(e) {
+    const m = ui.cropModal;
+    if (!m) return;
+    e.preventDefault();
+    const startX = e.clientX, startY = e.clientY;
+    const startOffsetX = m.offsetX, startOffsetY = m.offsetY;
+    function onMove(ev) {
+      const c = clampCropOffset(m, startOffsetX + (ev.clientX - startX), startOffsetY + (ev.clientY - startY));
+      m.offsetX = c.offsetX;
+      m.offsetY = c.offsetY;
+      paintCropImg();
+    }
+    function onUp() {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+    }
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+  }
+
+  function onCropZoomInput(e) {
+    const m = ui.cropModal;
+    if (!m) return;
+    m.zoom = Number(e.target.value);
+    const c = clampCropOffset(m, m.offsetX, m.offsetY);
+    m.offsetX = c.offsetX;
+    m.offsetY = c.offsetY;
+    paintCropImg();
+  }
+
+  function cancelCropModal() {
+    if (ui.cropModal) URL.revokeObjectURL(ui.cropModal.imgSrc);
+    ui.cropModal = null;
+    render();
+  }
+
+  function confirmCropModal() {
+    const m = ui.cropModal;
+    if (!m) return;
+    const img = document.querySelector('[data-field="cropImg"]');
+    const k = CROP_OUTPUT / CROP_FRAME;
+    const { left, top, width, height } = cropLayout(m);
+    const canvas = document.createElement("canvas");
+    canvas.width = CROP_OUTPUT;
+    canvas.height = CROP_OUTPUT;
+    canvas.getContext("2d").drawImage(img, left * k, top * k, width * k, height * k);
+    ui.profileDraft.photo = canvas.toDataURL("image/jpeg", 0.85);
+    URL.revokeObjectURL(m.imgSrc);
+    ui.cropModal = null;
+    render();
+  }
+
+  function screenCropModal() {
+    const m = ui.cropModal;
+    const { left, top, width, height } = cropLayout(m);
+    return h(
+      "div",
+      { style: { position: "fixed", inset: "0", background: "rgba(20,20,19,.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: "50", padding: "24px" } },
+      h(
+        "div",
+        { style: { background: "#f5f4ed", borderRadius: "20px", padding: "22px", width: "100%", maxWidth: "340px" } },
+        h("div", { style: { fontSize: "15px", fontWeight: "500", color: "#141413", textAlign: "center", marginBottom: "16px" } }, "Adjust photo"),
+        h(
+          "div",
+          {
+            style: { width: CROP_FRAME + "px", height: CROP_FRAME + "px", margin: "0 auto", borderRadius: "9999px", overflow: "hidden", position: "relative", background: "#e5e2d6", touchAction: "none", cursor: "grab" },
+            onpointerdown: startCropDrag,
+          },
+          h("img", { "data-field": "cropImg", src: m.imgSrc, draggable: "false", style: { position: "absolute", left: left + "px", top: top + "px", width: width + "px", height: height + "px", pointerEvents: "none", userSelect: "none" } })
+        ),
+        h("input", {
+          type: "range", min: "1", max: "3", step: "0.01", value: String(m.zoom),
+          style: { width: "100%", marginTop: "18px" },
+          oninput: onCropZoomInput,
+        }),
+        h(
+          "div",
+          { style: { display: "flex", gap: "12px", marginTop: "20px" } },
+          h("div", { class: "tap", style: { flex: "1", padding: "13px", borderRadius: "12px", textAlign: "center", fontSize: "14px", color: "#5e5d59", background: "#eeece3" }, onclick: cancelCropModal }, "Cancel"),
+          h("div", { class: "tap", style: { flex: "1", padding: "13px", borderRadius: "12px", textAlign: "center", fontSize: "14px", fontWeight: "500", color: "#faf9f5", background: "#c96442" }, onclick: confirmCropModal }, "Use photo")
+        )
+      )
+    );
   }
 
   // ---------------------------------------------------------------------
@@ -1260,9 +1396,9 @@
       title = "Create your account.";
       subtitle = "Your cards, tags and review history will sync to any device you log into.";
       body = [
-        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; render(); }),
+        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; if (!e.isComposing) render(); }),
         h("div", { style: { height: "10px" } }),
-        authField("authPassword", "password", a.password, "Password (min 6 characters)", (e) => { a.password = e.target.value; render(); }),
+        authField("authPassword", "password", a.password, "Password (min 6 characters)", (e) => { a.password = e.target.value; if (!e.isComposing) render(); }),
         authButton("Create account", "Creating…", !!(a.email.trim() && a.password), a.busy, signUp),
         errorNode,
         h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
@@ -1274,9 +1410,9 @@
       title = "Welcome back.";
       subtitle = "Log in to pick up right where you left off.";
       body = [
-        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; render(); }),
+        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; if (!e.isComposing) render(); }),
         h("div", { style: { height: "10px" } }),
-        authField("authPassword", "password", a.password, "Password", (e) => { a.password = e.target.value; render(); }),
+        authField("authPassword", "password", a.password, "Password", (e) => { a.password = e.target.value; if (!e.isComposing) render(); }),
         authButton("Log in", "Logging in…", !!(a.email.trim() && a.password), a.busy, logIn),
         errorNode,
         h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
@@ -1703,7 +1839,7 @@
         "div",
         { style: { margin: "14px 20px 0", display: "flex", alignItems: "center", gap: "10px", padding: "11px 14px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "12px" } },
         icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.5-4.5"/>', 15, "#b0aea5"),
-        h("input", { "data-field": "query", value: ui.query, placeholder: "Search sentence, note or tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14px", color: "#141413" }, oninput: (e) => { ui.query = e.target.value; render(); } })
+        h("input", { "data-field": "query", value: ui.query, placeholder: "Search sentence, note or tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14px", color: "#141413" }, oninput: (e) => { ui.query = e.target.value; if (!e.isComposing) render(); } })
       ),
 
       h(
@@ -1810,7 +1946,7 @@
         "div",
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
         h("div", { class: "tap", style: { fontSize: "14px", color: "#5e5d59" }, onclick: cancelCardForm }, "Cancel"),
-        h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, d.editingId ? "Edit card" : "New card"),
+        h("div", { style: { fontSize: "13px", color: ui.cardSavedFlash ? "#3a9d5d" : "#b0aea5" } }, ui.cardSavedFlash ? "Saved ✓" : d.editingId ? "Edit card" : "New card"),
         h("div", { class: canSave ? "tap" : "", style: { fontSize: "14px", fontWeight: "500", color: canSave ? "#c96442" : "#b0aea5" }, onclick: canSave ? saveCard : null }, "Save")
       ),
 
@@ -1818,7 +1954,7 @@
         "div",
         { style: { padding: "22px 20px 0" } },
         h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Front · sentence"),
-        h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.front = e.target.value; render(); }, onblur: handleFrontBlur }, d.front)
+        h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.front = e.target.value; if (!e.isComposing) render(); }, onblur: handleFrontBlur }, d.front)
       ),
 
       h(
@@ -1830,7 +1966,7 @@
           h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Romaji · optional"),
           d.romajiLoading ? h("div", { style: { fontSize: "11px", color: "#b0aea5" } }, "Generating…") : null
         ),
-        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" }, oninput: (e) => { d.romaji = e.target.value; d.romajiAuto = false; d.romajiSuggestion = null; render(); } }),
+        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" }, oninput: (e) => { d.romaji = e.target.value; d.romajiAuto = false; d.romajiSuggestion = null; if (!e.isComposing) render(); } }),
         d.romajiSuggestion
           ? h(
               "div",
@@ -1844,7 +1980,7 @@
         "div",
         { style: { padding: "20px 20px 0" } },
         h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Back · note"),
-        h("textarea", { "data-field": "back", rows: "2", placeholder: "I swam yesterday.", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "17px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.back = e.target.value; render(); } }, d.back)
+        h("textarea", { "data-field": "back", rows: "2", placeholder: "I swam yesterday.", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "17px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.back = e.target.value; if (!e.isComposing) render(); } }, d.back)
       ),
 
       h(
@@ -1867,7 +2003,7 @@
         h(
           "div",
           { style: { marginTop: "10px", display: "flex", gap: "8px" } },
-          h("input", { "data-field": "newTag", value: d.newTag, placeholder: "New tag", style: { flex: "1", padding: "11px 14px", background: "#faf9f5", border: "1px dashed #ddd8c8", borderRadius: "9999px", fontSize: "13px", color: "#141413" }, oninput: (e) => { d.newTag = e.target.value; render(); }, onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addNewTag(); } } }),
+          h("input", { "data-field": "newTag", value: d.newTag, placeholder: "New tag", style: { flex: "1", padding: "11px 14px", background: "#faf9f5", border: "1px dashed #ddd8c8", borderRadius: "9999px", fontSize: "13px", color: "#141413" }, oninput: (e) => { d.newTag = e.target.value; if (!e.isComposing) render(); }, onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addNewTag(); } } }),
           h("div", { class: "tap", style: { padding: "11px 18px", borderRadius: "9999px", background: "#f0eee6", color: "#141413", fontSize: "13px" }, onclick: addNewTag }, "Add")
         )
       ),
@@ -1955,7 +2091,7 @@
         h("input", {
           "data-field": "profileUsername", value: d.username, placeholder: "Your username",
           style: { marginTop: "10px", width: "100%", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "19px", color: "#141413" },
-          oninput: (e) => { d.username = e.target.value; render(); },
+          oninput: (e) => { d.username = e.target.value; if (!e.isComposing) render(); },
         })
       ),
 
@@ -1966,12 +2102,12 @@
         h("input", {
           "data-field": "pwNew", type: "password", value: ui.pwDraft.password, placeholder: "New password",
           style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" },
-          oninput: (e) => { ui.pwDraft.password = e.target.value; render(); },
+          oninput: (e) => { ui.pwDraft.password = e.target.value; if (!e.isComposing) render(); },
         }),
         h("input", {
           "data-field": "pwConfirm", type: "password", value: ui.pwDraft.confirm, placeholder: "Confirm new password",
           style: { marginTop: "8px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" },
-          oninput: (e) => { ui.pwDraft.confirm = e.target.value; render(); },
+          oninput: (e) => { ui.pwDraft.confirm = e.target.value; if (!e.isComposing) render(); },
         }),
         ui.pwDraft.error ? h("div", { style: { marginTop: "8px", fontSize: "12px", color: "#c96442" } }, ui.pwDraft.error) : null,
         h(
@@ -2030,6 +2166,7 @@
       default: content = screenHome();
     }
     phone.appendChild(content);
+    if (ui.cropModal) phone.appendChild(screenCropModal());
     root.appendChild(phone);
 
     root.querySelectorAll("[data-remember-scroll]").forEach((el) => {

@@ -216,6 +216,7 @@
     cardSavedFlash: false,
     cropModal: null, // { imgSrc, natW, natH, zoom, offsetX, offsetY } while cropping a new profile photo
     heatmapTip: null, // { key, count } — the heatmap day currently hovered/tapped
+    deletingAccount: false,
   };
 
   let recTimer = null;
@@ -1086,6 +1087,32 @@
     if (!confirm("Log out?")) return;
     resetToAuthScreen();
     await sb.auth.signOut();
+  }
+
+  async function deleteAccount() {
+    if (ui.deletingAccount) return;
+    if (!confirm("Permanently delete your account? This removes your login and every card, tag, and review history you have. This cannot be undone.")) return;
+    const session = await getSessionSafe();
+    if (!session) { alert("You're not logged in."); return; }
+    ui.deletingAccount = true;
+    render();
+    try {
+      const res = await fetch("/api/delete-account", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + session.access_token },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to delete account");
+      }
+      resetToAuthScreen();
+      await sb.auth.signOut();
+    } catch (e) {
+      alert("Couldn't delete your account: " + e.message + "\nPlease check your connection and try again.");
+    } finally {
+      ui.deletingAccount = false;
+      render();
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -2179,6 +2206,16 @@
         "div",
         { style: { padding: "30px 20px 0" } },
         h("div", { class: "tap", style: { padding: "14px", borderRadius: "12px", textAlign: "center", border: "1px solid #f0eee6", color: "#5e5d59", fontSize: "13.5px" }, onclick: logOut }, "Log out")
+      ),
+
+      h(
+        "div",
+        { style: { padding: "14px 20px 0" } },
+        h(
+          "div",
+          { class: ui.deletingAccount ? "" : "tap", style: { padding: "14px", borderRadius: "12px", textAlign: "center", color: ui.deletingAccount ? "#e0a89a" : "#c96442", fontSize: "13.5px" }, onclick: ui.deletingAccount ? null : deleteAccount },
+          ui.deletingAccount ? "Deleting account…" : "Delete account"
+        )
       ),
 
       h("div", { style: { height: "40px" } })

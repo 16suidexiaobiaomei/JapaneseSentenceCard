@@ -1,0 +1,16 @@
+node_modules
+.git
+.github
+.gitignore
+.vercel
+.capacitorignore
+api
+supabase
+ios
+android
+capacitor.config.ts
+package.json
+package-lock.json
+vercel.json
+*.md
+.DS_Store

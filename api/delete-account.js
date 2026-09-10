@@ -19,6 +19,17 @@ const SUPABASE_URL = "https://asgyhietqpoamagitycs.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_oCqtHBphJuPnFgrK87K7PA_XwemlHSO";
 
 module.exports = async (req, res) => {
+  // Called cross-origin from the native app shell (capacitor://localhost) —
+  // needs an explicit CORS allowance and a handled preflight. Auth here is
+  // a Bearer token, not cookies, so a wildcard origin carries no risk.
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization");
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+
   if (req.method !== "POST") {
     res.status(405).json({ error: "POST only" });
     return;

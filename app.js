@@ -21,6 +21,12 @@
   // explicitly so it doesn't depend on the Supabase dashboard's Site URL
   // being set correctly.
   const APP_URL = "https://japanesesentencecards.com/";
+  // Inside the native iOS/Android shell there's no same-origin backend to
+  // hit with a relative fetch("/api/...") — the page is served from a
+  // local/custom scheme, not from japanesesentencecards.com. Route API
+  // calls to the deployed site in that case; on the web the relative path
+  // already works and stays that way (no reason to force cross-origin).
+  const API_BASE = window.Capacitor && window.Capacitor.isNativePlatform() ? "https://japanesesentencecards.com" : "";
 
   // ---------------------------------------------------------------------
   // FSRS (Free Spaced Repetition Scheduler) — v4.5 formulas & default weights.
@@ -907,7 +913,7 @@
 
   async function generateRomaji(text) {
     try {
-      const res = await fetch("/api/romaji", {
+      const res = await fetch(API_BASE + "/api/romaji", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
@@ -1097,7 +1103,7 @@
     ui.deletingAccount = true;
     render();
     try {
-      const res = await fetch("/api/delete-account", {
+      const res = await fetch(API_BASE + "/api/delete-account", {
         method: "POST",
         headers: { Authorization: "Bearer " + session.access_token },
       });

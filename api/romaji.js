@@ -59,6 +59,18 @@ async function writeCache(hash, romaji) {
 }
 
 module.exports = async (req, res) => {
+  // The native iOS/Android app calls this cross-origin (from
+  // capacitor://localhost, not japanesesentencecards.com), which needs an
+  // explicit CORS allowance and a handled preflight. No cookies/credentials
+  // are involved, so a wildcard origin is fine here.
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+
   if (req.method !== "POST") {
     res.status(405).json({ error: "POST only" });
     return;

@@ -1573,7 +1573,7 @@
             "div",
             {},
             h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Japanese"),
-            h("div", { style: { marginTop: "1px", fontFamily: "var(--serif)", fontSize: "23px", fontWeight: "600", color: "#141413", letterSpacing: "-.2px", lineHeight: "1.1" } }, "Sentence Card")
+            h("div", { style: { marginTop: "1px", fontFamily: "var(--serif)", fontSize: "23px", fontWeight: "600", color: "#b0aea5", letterSpacing: "-.2px", lineHeight: "1.1" } }, "Sentence Card")
           )
         ),
         h(

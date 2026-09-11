@@ -703,6 +703,14 @@
     mediaRecorder.ondataavailable = (e) => { if (e.data.size) recChunks.push(e.data); };
     mediaRecorder.onstop = () => {
       recStream.getTracks().forEach((t) => t.stop());
+      // iOS puts the audio session into voice-chat mode (with echo
+      // cancellation) for the duration of any mic capture, and doesn't
+      // undo that just because the tracks stopped — left alone, every
+      // later playback of this recording (or any other audio) keeps
+      // running through that DSP path and comes out sounding echoey.
+      if (window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins && window.Capacitor.Plugins.AudioSessionFix) {
+        window.Capacitor.Plugins.AudioSessionFix.resetForPlayback().catch(() => {});
+      }
       const blob = new Blob(recChunks, { type: mediaRecorder.mimeType || "audio/webm" });
       const reader = new FileReader();
       reader.onload = () => {
@@ -2035,7 +2043,7 @@
           h(
             "div",
             { style: { flex: "1", minWidth: "0" } },
-            h("div", { style: { fontSize: "13.5px", color: "#141413" } }, d.recState === "idle" ? "Tap to record your voice" : d.recState === "active" ? "Recording · 0:0" + d.recSec : "Recorded · tap to play"),
+            h("div", { style: { fontSize: "13.5px", color: "#141413" } }, d.recState === "idle" ? "Tap to record your voice" : d.recState === "active" ? "Recording · 0:0" + d.recSec : "Recorded"),
             d.recState !== "idle" ? h("div", { style: { marginTop: "8px", fontSize: "11px", color: "#b0aea5" } }, d.recState === "active" ? "Tap again to stop" : "") : null
           ),
           d.recState === "done" ? h("div", { class: "tap", style: { fontSize: "12px", color: "#5e5d59", flexShrink: "0" }, onclick: () => { d.recState = "idle"; d.recording = null; render(); } }, "Redo") : null

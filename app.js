@@ -1442,11 +1442,17 @@
   // ---------------------------------------------------------------------
 
   function logoMark() {
+    const lineStyle = { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" };
     return h(
       "div",
-      { style: { display: "flex", alignItems: "center", gap: "9px" } },
-      h("div", { style: { height: "26px", padding: "0 7px", borderRadius: "8px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "12px", fontWeight: "600", letterSpacing: ".02em" } }, "JSC"),
-      h("div", { style: { fontFamily: "var(--serif)", fontSize: "16px", fontWeight: "500", color: "#141413", letterSpacing: ".1px" } }, "Japanese Sentence Card")
+      { style: { display: "flex", alignItems: "center", gap: "13px" } },
+      h("div", { style: { width: "46px", height: "46px", flexShrink: "0", borderRadius: "13px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "13px", fontWeight: "600", letterSpacing: ".02em" } }, "JSC"),
+      h(
+        "div",
+        {},
+        h("div", { style: lineStyle }, "Japanese"),
+        h("div", { style: Object.assign({}, lineStyle, { marginTop: "1px" }) }, "Sentence Card")
+      )
     );
   }
 
@@ -1463,7 +1469,12 @@
     return h("input", {
       "data-field": dataField, type, value, placeholder,
       style: { width: "100%", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "15px", color: "#141413" },
-      oninput: onInput,
+      // Unlike the free-text fields render() is deliberately skipped for
+      // (see the note above render()), this form is two short fields
+      // gating a single submit button — worth the debounced re-render so
+      // that button doesn't sit gray until the user taps away from the
+      // field.
+      oninput: (e) => { onInput(e); scheduleRender(); },
       onblur: flushRender,
     });
   }
@@ -1565,17 +1576,7 @@
       h(
         "div",
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 14px" } },
-        h(
-          "div",
-          { style: { display: "flex", alignItems: "center", gap: "13px" } },
-          h("div", { style: { width: "46px", height: "46px", flexShrink: "0", borderRadius: "13px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "13px", fontWeight: "600", letterSpacing: ".02em" } }, "JSC"),
-          h(
-            "div",
-            {},
-            h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Japanese"),
-            h("div", { style: { marginTop: "1px", fontFamily: "var(--serif)", fontSize: "23px", fontWeight: "600", color: "#b0aea5", letterSpacing: "-.2px", lineHeight: "1.1" } }, "Sentence Card")
-          )
-        ),
+        logoMark(),
         h(
           "div",
           { style: { display: "flex", alignItems: "center", gap: "10px" } },

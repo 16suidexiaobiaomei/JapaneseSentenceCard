@@ -1446,7 +1446,7 @@
     return h(
       "div",
       { style: { display: "flex", alignItems: "center", gap: "13px" } },
-      h("div", { style: { width: "46px", height: "46px", flexShrink: "0", borderRadius: "13px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "13px", fontWeight: "600", letterSpacing: ".02em" } }, "JSC"),
+      h("div", { style: { width: "46px", height: "46px", flexShrink: "0", borderRadius: "13px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "15px", fontWeight: "600", letterSpacing: ".02em" } }, "JSC"),
       h(
         "div",
         {},

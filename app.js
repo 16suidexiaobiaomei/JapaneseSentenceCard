@@ -1469,12 +1469,11 @@
     return h("input", {
       "data-field": dataField, type, value, placeholder,
       style: { width: "100%", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "15px", color: "#141413" },
-      // Unlike the free-text fields render() is deliberately skipped for
-      // (see the note above render()), this form is two short fields
-      // gating a single submit button — worth the debounced re-render so
-      // that button doesn't sit gray until the user taps away from the
-      // field.
-      oninput: (e) => { onInput(e); scheduleRender(); },
+      // No render() on input, same as the app's other free-text fields —
+      // it disrupted typing (autocorrect, key-repeat) even debounced. The
+      // Log in/Create account button's enabled state only updates once
+      // the user leaves the field (below), not on every keystroke.
+      oninput: onInput,
       onblur: flushRender,
     });
   }

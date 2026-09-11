@@ -74,6 +74,12 @@ textarea:focus, input:focus { outline: none; border-color: var(--focus) !importa
   .phone { height: min(874px, calc(100dvh - 56px)); border-radius: 32px; box-shadow: 0 30px 70px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06); }
 }
 
+/* Inside the native app there's no browser chrome, so the "phone mockup"
+   framing above is undone: the app fills the real device screen edge to
+   edge on iPhone and iPad alike. */
+.native-app #app { padding: 0; }
+.native-app .phone { max-width: none; height: 100dvh; border-radius: 0; box-shadow: none; }
+
 /* dark screens (review / done) */
 .phone.dark { background: var(--dark); }
 

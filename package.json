@@ -4,7 +4,7 @@
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "ios:prepare": "rm -rf www && mkdir -p www && cp app.js apple-touch-icon.png favicon.png icon-192.png icon-512.png index.html manifest.json style.css www/",
+    "ios:prepare": "rm -rf www && mkdir -p www && cp app.js apple-touch-icon.png favicon.png icon-192.png icon-512.png index.html manifest.json style.css vendor-supabase.js www/",
     "ios:sync": "npm run ios:prepare && npx cap sync ios",
     "ios:open": "npm run ios:sync && npx cap open ios"
   },
@@ -20,6 +20,7 @@
   "dependencies": {
     "@capacitor/core": "^8.5.1",
     "@capacitor/ios": "^8.5.1",
+    "@supabase/supabase-js": "^2.109.0",
     "kuromoji": "^0.1.2",
     "kuroshiro": "^1.2.0",
     "kuroshiro-analyzer-kuromoji": "^1.1.0"

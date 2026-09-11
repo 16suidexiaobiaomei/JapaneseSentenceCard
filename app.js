@@ -16,6 +16,14 @@
   // ---------------------------------------------------------------------
   const SUPABASE_URL = "https://asgyhietqpoamagitycs.supabase.co";
   const SUPABASE_KEY = "sb_publishable_oCqtHBphJuPnFgrK87K7PA_XwemlHSO";
+  if (!window.supabase) {
+    // Nothing to recover here — without this library the app can't do
+    // anything — but a visible message beats a permanently blank screen
+    // with no console to explain it.
+    document.getElementById("app").innerHTML =
+      '<div style="padding:60px 24px;text-align:center;font-family:sans-serif;color:#5e5d59">Couldn\'t load a required script. Check your connection and reopen the app.</div>';
+    return;
+  }
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   // Confirmation-email links must redirect back into the app — passed
   // explicitly so it doesn't depend on the Supabase dashboard's Site URL
@@ -27,6 +35,13 @@
   // calls to the deployed site in that case; on the web the relative path
   // already works and stays that way (no reason to force cross-origin).
   const API_BASE = window.Capacitor && window.Capacitor.isNativePlatform() ? "https://japanesesentencecards.com" : "";
+  // style.css frames the app as a centered "phone mockup" card on wide
+  // viewports — a nice touch on a desktop browser, but wrong inside the
+  // native app itself (there's no browser chrome to distinguish it from,
+  // and on iPad it just looks like the app doesn't fill the screen).
+  if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+    document.documentElement.classList.add("native-app");
+  }
 
   // ---------------------------------------------------------------------
   // FSRS (Free Spaced Repetition Scheduler) — v4.5 formulas & default weights.

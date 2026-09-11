@@ -1567,9 +1567,14 @@
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 14px" } },
         h(
           "div",
-          { style: { display: "flex", alignItems: "center", gap: "9px" } },
-          h("div", { style: { height: "26px", padding: "0 7px", borderRadius: "8px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "12px", fontWeight: "600", letterSpacing: ".02em" } }, "JSC"),
-          h("div", { style: { fontFamily: "var(--serif)", fontSize: "16px", fontWeight: "500", color: "#141413", letterSpacing: ".1px" } }, "Japanese Sentence Card")
+          { style: { display: "flex", alignItems: "center", gap: "13px" } },
+          h("div", { style: { width: "46px", height: "46px", flexShrink: "0", borderRadius: "13px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "13px", fontWeight: "600", letterSpacing: ".02em" } }, "JSC"),
+          h(
+            "div",
+            {},
+            h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Japanese"),
+            h("div", { style: { marginTop: "1px", fontFamily: "var(--serif)", fontSize: "23px", fontWeight: "600", color: "#141413", letterSpacing: "-.2px", lineHeight: "1.1" } }, "Sentence Card")
+          )
         ),
         h(
           "div",

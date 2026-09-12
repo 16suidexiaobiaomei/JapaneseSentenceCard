@@ -511,13 +511,20 @@
     }
   }
 
+  // Returns an error message on failure (or null on success/offline) so
+  // saveProfile() can actually tell the user instead of the save silently
+  // not sticking — offline is expected/retried later, a real rejection
+  // from the server (e.g. a constraint violation) is not.
   async function pushProfile() {
     const session = await getSessionSafe();
-    if (!session) return;
+    if (!session) return null;
     try {
-      await sb.from("profiles").upsert({ id: session.user.id, username: data.profile.username || null, photo: data.profile.photo, total_active_ms: data.totalActiveMs });
+      const { error } = await sb.from("profiles").upsert({ id: session.user.id, username: data.profile.username || null, photo: data.profile.photo, total_active_ms: data.totalActiveMs });
+      if (error) { console.warn("pushProfile rejected", error); return error.message; }
+      return null;
     } catch (e) {
       console.warn("pushProfile failed (offline?)", e);
+      return null;
     }
   }
 
@@ -1077,11 +1084,12 @@
     go("home");
   }
 
-  function saveProfile() {
+  async function saveProfile() {
     data.profile = { username: ui.profileDraft.username.trim(), photo: ui.profileDraft.photo };
     saveData();
     go("home");
-    pushProfile();
+    const errorMessage = await pushProfile();
+    if (errorMessage) alert("Couldn't save your profile to your account: " + errorMessage + "\nIt's saved on this device, but won't sync until this is resolved.");
   }
 
   async function changePassword() {

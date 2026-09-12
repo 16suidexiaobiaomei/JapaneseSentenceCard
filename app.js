@@ -215,7 +215,7 @@
 
   // Transient (not persisted) UI/session state
   function blankAuthState() {
-    return { mode: "login", email: "", password: "", pendingEmail: "", error: "", busy: false };
+    return { mode: "login", email: "", password: "", confirm: "", pendingEmail: "", error: "", busy: false };
   }
 
   function blankPasswordState() {
@@ -1245,6 +1245,43 @@
     render();
   }
 
+  async function requestPasswordReset() {
+    const a = ui.auth;
+    if (a.busy) return;
+    const email = a.email.trim();
+    if (!email) { a.error = "Enter your email."; render(); return; }
+    a.busy = true;
+    a.error = "";
+    render();
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: APP_URL });
+    a.busy = false;
+    // Not an error path — reusing a.error just as the "status message" slot,
+    // same as resendConfirmationEmail() does above.
+    a.error = error ? error.message : "Reset link sent — check your inbox.";
+    render();
+  }
+
+  // Reached via the PASSWORD_RECOVERY auth event (see onAuthStateChange at
+  // the bottom of this file), not from switchAuthMode — clicking the emailed
+  // reset link hands this tab a temporary "recovery" session, which is
+  // enough for updateUser() to actually change the password.
+  async function completePasswordReset() {
+    const a = ui.auth;
+    if (a.busy) return;
+    if (a.password.length < 6) { a.error = "Password must be at least 6 characters."; render(); return; }
+    if (a.password !== a.confirm) { a.error = "Passwords don't match."; render(); return; }
+    a.busy = true;
+    a.error = "";
+    render();
+    const { error } = await sb.auth.updateUser({ password: a.password });
+    a.busy = false;
+    if (error) { a.error = error.message; render(); return; }
+    const session = await getSessionSafe();
+    ui.auth = blankAuthState();
+    if (session) await enterApp(session);
+    else { ui.screen = "auth"; render(); }
+  }
+
   function handlePhotoFile(file) {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -1504,6 +1541,27 @@
           h("div", { class: "tap", style: { fontSize: "13px", color: "#c96442" }, onclick: resendConfirmationEmail }, "Resend email")
         ),
       ];
+    } else if (a.mode === "forgot") {
+      title = "Reset your password.";
+      subtitle = "Enter your email and we'll send you a link to set a new password.";
+      body = [
+        authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; }),
+        authButton("Send reset link", "Sending…", !!a.email.trim(), a.busy, requestPasswordReset),
+        errorNode,
+        h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
+          h("span", { class: "tap", style: { color: "#c96442" }, onclick: () => switchAuthMode("login") }, "Back to log in")
+        ),
+      ];
+    } else if (a.mode === "recover") {
+      title = "Set a new password.";
+      subtitle = "Choose a new password for your account.";
+      body = [
+        authField("authPassword", "password", a.password, "New password (min 6 characters)", (e) => { a.password = e.target.value; }),
+        h("div", { style: { height: "10px" } }),
+        authField("authConfirm", "password", a.confirm, "Confirm new password", (e) => { a.confirm = e.target.value; }),
+        authButton("Set password", "Saving…", !!(a.password && a.confirm), a.busy, completePasswordReset),
+        errorNode,
+      ];
     } else if (a.mode === "signup") {
       title = "Create your account.";
       subtitle = "Your cards, tags and review history will sync to any device you log into.";
@@ -1525,6 +1583,9 @@
         authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; }),
         h("div", { style: { height: "10px" } }),
         authField("authPassword", "password", a.password, "Password", (e) => { a.password = e.target.value; }),
+        h("div", { style: { marginTop: "10px", textAlign: "right" } },
+          h("span", { class: "tap", style: { fontSize: "12.5px", color: "#5e5d59" }, onclick: () => switchAuthMode("forgot") }, "Forgot password?")
+        ),
         authButton("Log in", "Logging in…", !!(a.email.trim() && a.password), a.busy, logIn),
         errorNode,
         h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
@@ -2363,6 +2424,15 @@
     // parses the token out of the URL and fires this before our own
     // signUp()/logIn() would ever have set the screen away from "auth".
     if (event === "SIGNED_IN" && session && (ui.screen === "auth" || ui.screen === "boot")) enterApp(session);
+    // Clicking the "reset your password" email link lands here with a
+    // temporary recovery session — show the "set a new password" screen
+    // instead of whatever was on screen (even a cached logged-in view).
+    if (event === "PASSWORD_RECOVERY") {
+      ui.auth = blankAuthState();
+      ui.auth.mode = "recover";
+      ui.screen = "auth";
+      render();
+    }
   });
 
   (async () => {

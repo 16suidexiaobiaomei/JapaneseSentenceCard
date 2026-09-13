@@ -2360,7 +2360,7 @@
           settingsRow(
             "Contact us",
             [
-              h("span", { style: { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "13.5px", color: ui.emailCopiedFlash ? "#3a9d5d" : "#87867f" } }, ui.emailCopiedFlash ? "Copied ✓" : "support@japanesesentencecards.com"),
+              ui.emailCopiedFlash ? h("span", { style: { fontSize: "13.5px", color: "#3a9d5d" } }, "Copied ✓") : null,
               chevronNode(),
             ],
             copySupportEmail

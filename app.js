@@ -248,6 +248,13 @@
     myTagsFrozen: false, // profiles.sharing_frozen, loaded alongside
     renameTagSheet: null, // { oldName, newName } while the rename sheet is open
     shareDraft: null, // { tagName, selectedIds, backLanguage, description, busy, error } during the share flow
+    communityLoading: false,
+    communityFeed: [], // active shared_tags rows, loaded on entering Community
+    communityDownloadedIds: [], // shared_tag_id[] this account has already downloaded
+    communitySearch: "",
+    communityLangFilter: "Any",
+    tagDetail: null, // { row, previewCards, loading } while viewing a shared tag's detail
+    downloadDraft: null, // { row, name, error, busy } confirming/renaming before a download
   };
 
   let recTimer = null;
@@ -1034,6 +1041,92 @@
     return matches.reduce((a, b) => (new Date(b.created_at) > new Date(a.created_at) ? b : a));
   }
 
+  // ---------------------------------------------------------------------
+  // Community: browse, tag detail, download
+  // ---------------------------------------------------------------------
+
+  async function openCommunity() {
+    go("community");
+    ui.communityLoading = true;
+    render();
+    const session = await getSessionSafe();
+    if (!session) { ui.communityLoading = false; render(); return; }
+    try {
+      const [{ data: feed }, { data: downloads }] = await Promise.all([
+        sb.from("shared_tags").select("*").eq("status", "active").order("download_count", { ascending: false }),
+        sb.from("shared_tag_downloads").select("shared_tag_id").eq("user_id", session.user.id),
+      ]);
+      ui.communityFeed = feed || [];
+      ui.communityDownloadedIds = (downloads || []).map((d) => d.shared_tag_id);
+    } catch (e) {
+      console.warn("loading Community failed (offline?)", e);
+    }
+    ui.communityLoading = false;
+    render();
+  }
+
+  // Distinct back-languages actually present in the feed, plus "Any" —
+  // avoids showing filter chips for languages nobody has shared in yet.
+  function communityLangChips() {
+    const present = new Set(ui.communityFeed.map((r) => r.back_language).filter(Boolean));
+    return ["Any"].concat(BACK_LANGUAGES.filter((l) => present.has(l)));
+  }
+
+  function communityFilteredFeed() {
+    const q = ui.communitySearch.trim().toLowerCase();
+    return ui.communityFeed.filter((r) => {
+      if (ui.communityLangFilter !== "Any" && r.back_language !== ui.communityLangFilter) return false;
+      if (!q) return true;
+      return r.name.toLowerCase().includes(q) || (r.description || "").toLowerCase().includes(q);
+    });
+  }
+
+  async function openTagDetail(row) {
+    ui.tagDetail = { row, previewCards: [], loading: true };
+    go("tagDetail");
+    try {
+      const { data: cards } = await sb.from("shared_tag_cards").select("front, back").eq("shared_tag_id", row.id).order("sort_order").limit(10);
+      if (ui.tagDetail && ui.tagDetail.row.id === row.id) ui.tagDetail.previewCards = cards || [];
+    } catch (e) {
+      console.warn("loading tag detail failed (offline?)", e);
+    }
+    if (ui.tagDetail && ui.tagDetail.row.id === row.id) ui.tagDetail.loading = false;
+    render();
+  }
+
+  // A name collision with an existing local tag needs resolving before
+  // download_shared_tag() can run — it takes the local tag name
+  // up front and just writes straight into it, so a silent collision
+  // would quietly merge someone else's deck into an unrelated tag.
+  function startDownloadFlow(row) {
+    const collision = browsableTags().includes(row.name);
+    ui.downloadDraft = { row, name: collision ? row.name + " (" + row.owner_display_name + ")" : row.name, error: "", busy: false };
+    render();
+  }
+
+  function closeDownloadDraft() {
+    ui.downloadDraft = null;
+    render();
+  }
+
+  async function submitDownload() {
+    const d = ui.downloadDraft;
+    const name = d.name.trim();
+    if (!name || d.busy) return;
+    if (browsableTags().includes(name)) { d.error = 'You already have a tag called "' + name + '". Choose a different name.'; render(); return; }
+    d.busy = true;
+    d.error = "";
+    render();
+    const { data: count, error } = await sb.rpc("download_shared_tag", { p_shared_tag_id: d.row.id, p_local_tag_name: name });
+    d.busy = false;
+    if (error) { d.error = error.message; render(); return; }
+    ui.communityDownloadedIds = ui.communityDownloadedIds.concat(d.row.id);
+    ui.downloadDraft = null;
+    render();
+    await syncNow(); // pulls the newly-copied cards down into data.cards
+    alert(count ? 'Added "' + name + '" — ' + count + " cards." : 'You already had this one — nothing new to add.');
+  }
+
   // Pausing is a one-tap toggle — resuming isn't (see openReshareFlow
   // below): a paused tag's card selection may be stale, so bringing it
   // back goes through the full share flow instead of a plain confirm.
@@ -1754,7 +1847,7 @@
       const wrap = h("div", {
         class: "tap",
         style: { flex: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", color: on ? "#c96442" : "#5e5d59" },
-        onclick: () => go(screen),
+        onclick: screen === "community" ? openCommunity : () => go(screen),
       });
       const svgWrap = h("div");
       svgWrap.innerHTML = `<svg width="21" height="21" viewBox="${viewBox}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -2560,26 +2653,237 @@
   // Placeholder for now — the actual browse/share/download flows are a
   // separate, larger phase (needs new backend tables). This just gives the
   // nav slot somewhere real to land instead of a dead tab.
+  function communityBackChip(lang, dark) {
+    return h(
+      "div",
+      { style: { height: "22px", padding: "0 9px", borderRadius: "11px", background: dark ? "#30302e" : "#eceae1", border: dark ? "none" : "1px solid #e8e6dc", display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", fontWeight: "500", color: dark ? "#f5f4ed" : "#4d4c48", alignSelf: "flex-start", flexShrink: "0" } },
+      icon('<path d="M3 6h12M9 3v3M11 17c-3.5-1-5.5-4.5-5.5-11M4 14c4 0 7-2 7-8"/><path d="M13 20l4-11 4 11M14.4 17h5.2"/>', 11, dark ? "#f5f4ed" : "#4d4c48"),
+      "Back: " + lang
+    );
+  }
+
+  function communityGridCard(row) {
+    const added = ui.communityDownloadedIds.includes(row.id);
+    return h(
+      "div",
+      { class: "tap", style: { background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px", padding: "14px", display: "flex", flexDirection: "column", gap: "6px", minHeight: "118px" }, onclick: () => openTagDetail(row) },
+      h("span", { style: { fontFamily: "var(--serif)", fontSize: "16.5px", fontWeight: "500", color: "#141413" } }, row.name),
+      h("span", { style: { fontSize: "11.5px", color: "#87867f" } }, "by " + row.owner_display_name),
+      communityBackChip(row.back_language, false),
+      h("span", { style: { marginTop: "auto", fontSize: "11.5px", color: "#87867f" } }, row.card_count + " cards"),
+      added
+        ? h("span", { style: { display: "flex", alignItems: "center", gap: "5px", fontSize: "11.5px", color: "#5e5d59" } }, icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "#5e5d59", { "stroke-width": "3" }), "Added")
+        : h("span", { style: { fontSize: "11.5px", color: "#c96442", fontWeight: "500" } }, row.download_count.toLocaleString() + " downloads")
+    );
+  }
+
   function screenCommunity() {
+    const filtered = communityFilteredFeed();
+    const chips = communityLangChips();
+    const isBrowsingDefault = !ui.communitySearch.trim() && ui.communityLangFilter === "Any";
+    const hero = isBrowsingDefault && filtered.length ? filtered[0] : null;
+    const gridItems = hero ? filtered.slice(1) : filtered;
+
     return h(
       "div",
       { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
 
       h(
         "div",
-        { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", color: "#141413" } }, "Community"),
-        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "13.5px", fontWeight: "500", color: "#c96442" }, onclick: openMyTags }, "My tags", chevronNode())
+        { style: { display: "flex", flexDirection: "column", gap: "11px", padding: "0 20px" } },
+        h(
+          "div",
+          { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+          h("h1", { style: { margin: "0", fontFamily: "var(--serif)", fontSize: "26px", fontWeight: "500", color: "#141413" } }, "Community"),
+          h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "13.5px", fontWeight: "500", color: "#c96442" }, onclick: openMyTags }, "My tags", chevronNode())
+        ),
+        h(
+          "div",
+          { style: { height: "44px", borderRadius: "22px", background: "#faf9f5", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", gap: "9px", padding: "0 15px" } },
+          icon('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>', 15, "#87867f"),
+          h("input", {
+            "data-field": "communitySearch", value: ui.communitySearch, placeholder: "Search by keyword",
+            style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14.5px", color: "#141413" },
+            oninput: (e) => { ui.communitySearch = e.target.value; if (!e.isComposing) scheduleRender(); },
+            onblur: flushRender,
+          })
+        ),
+        chips.length > 1
+          ? h(
+              "div",
+              { class: "scrollx", "data-remember-scroll": "community-filters", style: { display: "flex", alignItems: "center", gap: "8px", overflow: "auto" } },
+              h("span", { style: { fontSize: "11.5px", color: "#87867f", flexShrink: "0" } }, "Back"),
+              ...chips.map((lang) =>
+                h(
+                  "div",
+                  { class: "tap chip", style: Object.assign({ height: "30px", padding: "0 13px", borderRadius: "9999px", fontSize: "12.5px", fontWeight: "500", flexShrink: "0" }, chipStyle(ui.communityLangFilter === lang)), onclick: () => { ui.communityLangFilter = lang; render(); } },
+                  lang
+                )
+              )
+            )
+          : null
       ),
 
       h(
         "div",
-        { style: { flex: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px", textAlign: "center", gap: "10px" } },
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "20px", color: "#141413" } }, "Coming soon."),
-        h("div", { style: { fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } }, "Share your tags with other learners, and download decks other people have made.")
+        { "data-remember-scroll": "community-feed", style: { flex: "1", overflow: "auto", padding: "14px 20px 18px", display: "flex", flexDirection: "column", gap: "12px" } },
+        ui.communityLoading
+          ? h("div", { style: { fontSize: "13px", color: "#b0aea5", textAlign: "center", padding: "30px 0" } }, "Loading…")
+          : filtered.length === 0
+            ? h("div", { style: { fontSize: "13.5px", color: "#87867f", textAlign: "center", padding: "40px 20px", lineHeight: "1.6" } }, "No shared tags match yet — check back soon, or be the first to share one from My Tags.")
+            : [
+                hero
+                  ? h(
+                      "div",
+                      { class: "tap", style: { background: "#141413", borderRadius: "16px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "7px" }, onclick: () => openTagDetail(hero) },
+                      h("span", { style: { fontSize: "10px", letterSpacing: "1.1px", textTransform: "uppercase", color: "#b0aea5" } }, "Most downloaded"),
+                      h("span", { style: { fontFamily: "var(--serif)", fontSize: "20px", fontWeight: "500", color: "#faf9f5", lineHeight: "1.2" } }, hero.name),
+                      h("span", { style: { fontSize: "12px", color: "#b0aea5" } }, "by " + hero.owner_display_name),
+                      h(
+                        "div",
+                        { style: { display: "flex", alignItems: "flex-end", justifyContent: "space-between" } },
+                        h(
+                          "div",
+                          { style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" } },
+                          communityBackChip(hero.back_language, true),
+                          h("span", { style: { fontSize: "12.5px", color: "#b0aea5" } }, hero.card_count + " cards")
+                        ),
+                        h(
+                          "div",
+                          { style: { height: "32px", padding: "0 14px", borderRadius: "9999px", background: "#d97757", color: "#faf9f5", display: "flex", alignItems: "center", gap: "6px", fontSize: "13.5px", fontWeight: "500", flexShrink: "0" } },
+                          icon('<path d="M12 4v12m0 0 4-4m-4 4-4-4M4 20h16"/>', 14, "#faf9f5"),
+                          hero.download_count.toLocaleString()
+                        )
+                      )
+                    )
+                  : null,
+                gridItems.length
+                  ? h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" } }, ...gridItems.map((row) => communityGridCard(row)))
+                  : null,
+              ]
       ),
 
       bottomNav("community")
+    );
+  }
+
+  function downloadDraftSheetNode() {
+    const d = ui.downloadDraft;
+    return h(
+      "div",
+      { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", alignItems: "center", justifyContent: "center", padding: "26px", zIndex: "20" }, onclick: closeDownloadDraft },
+      h(
+        "div",
+        { style: { width: "100%", background: "#faf9f5", borderRadius: "20px", padding: "22px 20px", display: "flex", flexDirection: "column", gap: "14px" }, onclick: (e) => e.stopPropagation() },
+        h("span", { style: { fontFamily: "var(--serif)", fontSize: "20px", fontWeight: "500" } }, "Add this tag"),
+        browsableTags().includes(d.row.name)
+          ? h(
+              "p",
+              { style: { margin: "0", fontSize: "14px", lineHeight: "1.55", color: "#5e5d59" } },
+              "You already have a tag called ",
+              h("strong", { style: { color: "#141413", fontWeight: "500" } }, d.row.name),
+              ". Give the downloaded one a different name to keep them apart."
+            )
+          : h("p", { style: { margin: "0", fontSize: "14px", lineHeight: "1.55", color: "#5e5d59" } }, "This will add " + d.row.card_count + " cards to a local tag."),
+        h("input", {
+          "data-field": "downloadDraftName", value: d.name, placeholder: "Tag name",
+          style: { height: "50px", borderRadius: "12px", background: "#f5f4ed", border: "1.5px solid #c96442", padding: "0 15px", fontFamily: "var(--serif)", fontSize: "17px", color: "#141413" },
+          oninput: (e) => { d.name = e.target.value; },
+          onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); submitDownload(); } },
+        }),
+        d.error ? h("div", { style: { fontSize: "12.5px", color: "#c96442" } }, d.error) : null,
+        h(
+          "div",
+          { style: { display: "flex", gap: "10px", marginTop: "2px" } },
+          h("div", { class: "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "#e8e6dc", color: "#4d4c48", fontSize: "15px", fontWeight: "500" }, onclick: closeDownloadDraft }, "Cancel"),
+          h("div", { class: d.busy ? "" : "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "#141413", color: "#faf9f5", fontSize: "15px", fontWeight: "500", opacity: d.busy ? ".6" : "1" }, onclick: d.busy ? null : submitDownload }, d.busy ? "Adding…" : "Add tag")
+        )
+      )
+    );
+  }
+
+  function screenTagDetail() {
+    const t = ui.tagDetail;
+    const row = t.row;
+    const added = ui.communityDownloadedIds.includes(row.id);
+
+    return h(
+      "div",
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
+
+      h(
+        "div",
+        { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
+        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15.5px", color: "#5e5d59" }, onclick: () => { ui.tagDetail = null; go("community"); } }, icon('<path d="M15 18l-6-6 6-6"/>', 15, "#5e5d59"), "Community")
+      ),
+
+      h(
+        "div",
+        { "data-remember-scroll": "tagDetail", style: { flex: "1", overflow: "auto", padding: "14px 20px 18px", display: "flex", flexDirection: "column", gap: "16px" } },
+
+        h(
+          "div",
+          { style: { display: "flex", flexDirection: "column", gap: "9px" } },
+          h("span", { style: { fontFamily: "var(--serif)", fontSize: "27px", fontWeight: "500", color: "#141413", lineHeight: "1.15" } }, row.name),
+          h("span", { style: { fontSize: "13px", color: "#87867f" } }, "by " + row.owner_display_name),
+          h(
+            "div",
+            { style: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "8px" } },
+            communityBackChip(row.back_language, false),
+            h("span", { style: { fontSize: "13px", color: "#87867f" } }, row.card_count + " cards · " + row.download_count.toLocaleString() + " downloads")
+          )
+        ),
+
+        row.description ? h("p", { style: { margin: "0", fontSize: "14.5px", lineHeight: "1.6", color: "#4d4c48" } }, row.description) : null,
+
+        h(
+          "div",
+          { style: { display: "flex", flexDirection: "column", gap: "9px" } },
+          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, "Preview"),
+          t.loading
+            ? h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "Loading…")
+            : h(
+                "div",
+                { style: { background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px", overflow: "hidden" } },
+                ...t.previewCards.map((c, i) =>
+                  h(
+                    "div",
+                    {},
+                    i ? h("div", { style: { height: "1px", background: "#f0eee6" } }) : null,
+                    h(
+                      "div",
+                      { style: { padding: "12px 15px", display: "flex", flexDirection: "column", gap: "3px" } },
+                      h("span", { style: { fontFamily: "var(--jp)", fontSize: "14.5px", color: "#141413" } }, c.front),
+                      h("span", { style: { fontSize: "12px", color: "#87867f" } }, c.back)
+                    )
+                  )
+                ),
+                row.card_count > t.previewCards.length
+                  ? h("div", { style: { padding: "12px 15px", textAlign: "center", fontSize: "13px", color: "#87867f" } }, row.card_count - t.previewCards.length + " more in the full tag")
+                  : null
+              )
+        )
+      ),
+
+      h(
+        "div",
+        { style: { padding: "14px 20px 18px", background: "#f5f4ed" } },
+        added
+          ? h(
+              "div",
+              { style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "#f0eee6", color: "#5e5d59", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" } },
+              icon('<path d="m5 13 4.5 4.5L19 7"/>', 15, "#5e5d59", { "stroke-width": "3" }),
+              "Already added"
+            )
+          : h(
+              "div",
+              { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", gap: "9px" }, onclick: () => startDownloadFlow(row) },
+              icon('<path d="M12 4v12m0 0 4-4m-4 4-4-4M4 20h16"/>', 17, "#faf9f5"),
+              "Download tag"
+            )
+      ),
+
+      ui.downloadDraft ? downloadDraftSheetNode() : null
     );
   }
 
@@ -3200,6 +3504,7 @@
       case "add": content = screenAdd(); break;
       case "community": content = screenCommunity(); break;
       case "myTags": content = screenMyTags(); break;
+      case "tagDetail": content = ui.tagDetail ? screenTagDetail() : screenCommunity(); break;
       case "shareTag": content = screenShareTag(); break;
       case "profile": content = screenProfile(); break;
       case "changePassword": content = screenChangePassword(); break;

@@ -2753,14 +2753,14 @@
             );
           })(),
           h("textarea", {
-            "data-field": "shareDescription", rows: "3", value: d.description, placeholder: "Describe this tag for other learners…",
+            "data-field": "shareDescription", rows: "3", placeholder: "Describe this tag for other learners…",
             style: { borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", padding: "12px 15px", fontSize: "14px", color: "#141413", resize: "none" },
             // No render() on input, same as the app's other free-text
             // fields (front/back/profile/auth) — this field doesn't filter
             // anything live the way the search boxes do, so there's no
             // reason to risk it. The counter below just lags until blur.
             oninput: (e) => { d.description = e.target.value.slice(0, 500); }, onblur: flushRender,
-          }),
+          }, d.description),
           h("span", { style: { fontSize: "11.5px", color: "#b0aea5", textAlign: "right" } }, d.description.length + " / 500"),
           d.error ? h("div", { style: { fontSize: "12.5px", color: "#c96442" } }, d.error) : null,
           h(

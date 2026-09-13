@@ -2251,10 +2251,12 @@
   const RECENT_TAG = "Recently added";
   const RECENT_MS = 7 * 86400000;
 
-  // What language the *back* of a shared tag's cards is written in, so
-  // a learner can filter the community feed by their own language.
+  // What language the *back* of a shared tag's cards is written in — a
+  // real, specific language, since every card in a tag is actually in
+  // one. ("Any" belongs on the future community browse *filter*, not
+  // here — a tag itself is never actually in "any" language.)
   const BACK_LANGUAGES = [
-    "Any", "English", "Chinese (Simplified)", "Chinese (Traditional)", "Korean",
+    "English", "Chinese (Simplified)", "Chinese (Traditional)", "Korean",
     "Spanish", "French", "German", "Portuguese", "Italian", "Russian",
     "Vietnamese", "Thai", "Indonesian", "Arabic", "Hindi", "Turkish",
     "Polish", "Dutch", "Filipino/Tagalog", "Other",
@@ -2678,7 +2680,7 @@
 
       h(
         "div",
-        { style: { flex: "1", overflow: "auto", padding: "0 20px 18px", display: "flex", flexDirection: "column", gap: "16px" } },
+        { "data-remember-scroll": "shareTag", style: { flex: "1", overflow: "auto", padding: "0 20px 18px", display: "flex", flexDirection: "column", gap: "16px" } },
 
         h(
           "div",
@@ -2753,7 +2755,11 @@
           h("textarea", {
             "data-field": "shareDescription", rows: "3", value: d.description, placeholder: "Describe this tag for other learners…",
             style: { borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", padding: "12px 15px", fontSize: "14px", color: "#141413", resize: "none" },
-            oninput: (e) => { d.description = e.target.value.slice(0, 500); if (!e.isComposing) scheduleRender(); }, onblur: flushRender,
+            // No render() on input, same as the app's other free-text
+            // fields (front/back/profile/auth) — this field doesn't filter
+            // anything live the way the search boxes do, so there's no
+            // reason to risk it. The counter below just lags until blur.
+            oninput: (e) => { d.description = e.target.value.slice(0, 500); }, onblur: flushRender,
           }),
           h("span", { style: { fontSize: "11.5px", color: "#b0aea5", textAlign: "right" } }, d.description.length + " / 500"),
           d.error ? h("div", { style: { fontSize: "12.5px", color: "#c96442" } }, d.error) : null,

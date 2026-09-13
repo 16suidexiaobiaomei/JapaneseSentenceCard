@@ -250,7 +250,6 @@
     shareDraft: null, // { tagName, selectedIds, backLanguage, description, busy, error } during the share flow
     communityLoading: false,
     communityFeed: [], // active shared_tags rows, loaded on entering Community
-    communityDownloadedIds: [], // shared_tag_id[] this account has already downloaded
     communitySearch: "",
     communityLangFilter: "Any",
     tagDetail: null, // { row, previewCards, loading } while viewing a shared tag's detail
@@ -1052,12 +1051,8 @@
     const session = await getSessionSafe();
     if (!session) { ui.communityLoading = false; render(); return; }
     try {
-      const [{ data: feed }, { data: downloads }] = await Promise.all([
-        sb.from("shared_tags").select("*").eq("status", "active").order("download_count", { ascending: false }),
-        sb.from("shared_tag_downloads").select("shared_tag_id").eq("user_id", session.user.id),
-      ]);
+      const { data: feed } = await sb.from("shared_tags").select("*").eq("status", "active").order("download_count", { ascending: false });
       ui.communityFeed = feed || [];
-      ui.communityDownloadedIds = (downloads || []).map((d) => d.shared_tag_id);
     } catch (e) {
       console.warn("loading Community failed (offline?)", e);
     }
@@ -1079,6 +1074,16 @@
       if (!q) return true;
       return r.name.toLowerCase().includes(q) || (r.description || "").toLowerCase().includes(q);
     });
+  }
+
+  // "Already added" is derived from the user's own current cards
+  // rather than a "have you ever downloaded this" record — deleted_at
+  // tombstones are never kept in data.cards (see syncNow()'s merge), so
+  // this naturally goes back to false once every card from that source
+  // has been deleted, matching what download_shared_tag() itself now
+  // checks server-side before allowing a fresh re-add.
+  function hasLocalCardsFrom(sharedTagId) {
+    return data.cards.some((c) => c.sourceSharedTagId === sharedTagId);
   }
 
   async function openTagDetail(row) {
@@ -1120,7 +1125,6 @@
     const { data: count, error } = await sb.rpc("download_shared_tag", { p_shared_tag_id: d.row.id, p_local_tag_name: name });
     d.busy = false;
     if (error) { d.error = error.message; render(); return; }
-    ui.communityDownloadedIds = ui.communityDownloadedIds.concat(d.row.id);
     ui.downloadDraft = null;
     render();
     await syncNow(); // pulls the newly-copied cards down into data.cards
@@ -2653,17 +2657,24 @@
   // Placeholder for now — the actual browse/share/download flows are a
   // separate, larger phase (needs new backend tables). This just gives the
   // nav slot somewhere real to land instead of a dead tab.
+  // No "Back: " prefix here — the language filter row above already
+  // establishes that this whole section is about the back-card
+  // language, so repeating the word on every card was just noise (and
+  // on the narrow 2-column grid, a fixed pill height plus that extra
+  // text was forcing a wrap that then clipped against the fixed
+  // height). Sized to content instead of a fixed height so a long
+  // language name can wrap without clipping.
   function communityBackChip(lang, dark) {
     return h(
       "div",
-      { style: { height: "22px", padding: "0 9px", borderRadius: "11px", background: dark ? "#30302e" : "#eceae1", border: dark ? "none" : "1px solid #e8e6dc", display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", fontWeight: "500", color: dark ? "#f5f4ed" : "#4d4c48", alignSelf: "flex-start", flexShrink: "0" } },
-      icon('<path d="M3 6h12M9 3v3M11 17c-3.5-1-5.5-4.5-5.5-11M4 14c4 0 7-2 7-8"/><path d="M13 20l4-11 4 11M14.4 17h5.2"/>', 11, dark ? "#f5f4ed" : "#4d4c48"),
-      "Back: " + lang
+      { style: { padding: "4px 9px", borderRadius: "11px", background: dark ? "#30302e" : "#eceae1", border: dark ? "none" : "1px solid #e8e6dc", display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px", fontWeight: "500", color: dark ? "#f5f4ed" : "#4d4c48", alignSelf: "flex-start", flexShrink: "0", lineHeight: "1.3" } },
+      icon('<path d="M3 6h12M9 3v3M11 17c-3.5-1-5.5-4.5-5.5-11M4 14c4 0 7-2 7-8"/><path d="M13 20l4-11 4 11M14.4 17h5.2"/>', 11, dark ? "#f5f4ed" : "#4d4c48", { style: "flex-shrink:0" }),
+      lang
     );
   }
 
   function communityGridCard(row) {
-    const added = ui.communityDownloadedIds.includes(row.id);
+    const added = hasLocalCardsFrom(row.id);
     return h(
       "div",
       { class: "tap", style: { background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px", padding: "14px", display: "flex", flexDirection: "column", gap: "6px", minHeight: "118px" }, onclick: () => openTagDetail(row) },
@@ -2805,7 +2816,7 @@
   function screenTagDetail() {
     const t = ui.tagDetail;
     const row = t.row;
-    const added = ui.communityDownloadedIds.includes(row.id);
+    const added = hasLocalCardsFrom(row.id);
 
     return h(
       "div",

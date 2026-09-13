@@ -1199,7 +1199,7 @@
   // untouched. republishId tells submitShareTag() to update this row
   // in place instead of creating a new shared_tags row.
   function openReshareFlow(tagName, row) {
-    if (ui.myTagsFrozen) { alert("Sharing is paused on this account until " + formatFrozenUntil(ui.myTagsFrozenUntil) + ". Contact support@japanesesentencecards.com if you think this is a mistake."); return; }
+    if (ui.myTagsFrozen) { alert("Sharing is paused on this account until " + formatFrozenUntil(ui.myTagsFrozenUntil) + ". Contact us if you think this is a mistake."); return; }
     const eligible = eligibleCardsForTag(tagName);
     ui.shareDraft = {
       tagName,
@@ -3128,7 +3128,7 @@
           ? h(
               "div",
               { style: { padding: "14px 16px", background: "#faf3f0", border: "1px solid #f0e2dc", borderRadius: "14px", fontSize: "12.5px", lineHeight: "1.6", color: "#8a4a35" } },
-              "Sharing is paused on this account until " + formatFrozenUntil(ui.myTagsFrozenUntil) + " after multiple shared tags were removed for violating community guidelines. Contact support@japanesesentencecards.com if you think this is a mistake."
+              "Sharing is paused on this account until " + formatFrozenUntil(ui.myTagsFrozenUntil) + " after multiple shared tags were removed for violating community guidelines. Contact us if you think this is a mistake."
             )
           : null,
 

@@ -1106,6 +1106,12 @@
     d.busy = true;
     d.error = "";
     render();
+    // share_tag() checks the server's own copy of these cards, not
+    // whatever's local — a card added moments ago may not have finished
+    // its own (separately async) push yet, which otherwise looks
+    // identical to "not yours" from the RPC's point of view.
+    const selectedCards = data.cards.filter((c) => d.selectedIds.includes(c.id));
+    await pushCardsBulk(selectedCards);
     const { data: newId, error } = await sb.rpc("share_tag", {
       p_name: d.tagName,
       p_description: d.description.trim(),
@@ -2245,6 +2251,15 @@
   const RECENT_TAG = "Recently added";
   const RECENT_MS = 7 * 86400000;
 
+  // What language the *back* of a shared tag's cards is written in, so
+  // a learner can filter the community feed by their own language.
+  const BACK_LANGUAGES = [
+    "Any", "English", "Chinese (Simplified)", "Chinese (Traditional)", "Korean",
+    "Spanish", "French", "German", "Portuguese", "Italian", "Russian",
+    "Vietnamese", "Thai", "Indonesian", "Arabic", "Hindi", "Turkish",
+    "Polish", "Dutch", "Filipino/Tagalog", "Other",
+  ];
+
   function screenBrowse() {
     const tags = browsableTags();
     const q = ui.query.trim().toLowerCase();
@@ -2650,8 +2665,6 @@
     const eligibleIds = eligible.map((c) => c.id);
     const allEligibleSelected = eligibleIds.length > 0 && eligibleIds.every((id) => d.selectedIds.includes(id));
     const n = d.selectedIds.length;
-    const languages = ["Any", "English", "Chinese", "Korean"];
-
     return h(
       "div",
       { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
@@ -2723,18 +2736,22 @@
         h(
           "div",
           { style: { display: "flex", flexDirection: "column", gap: "9px" } },
-          h(
-            "div",
-            { style: { height: "46px", borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 15px", gap: "10px" } },
-            h("span", { style: { fontSize: "12.5px", color: "#5e5d59" } }, "Back-card language"),
-            h(
+          (() => {
+            const select = h(
+              "select",
+              { style: { border: "none", outline: "none", background: "transparent", fontSize: "14.5px", fontWeight: "500", color: "#141413", textAlign: "right" }, onchange: (e) => { d.backLanguage = e.target.value; render(); } },
+              ...BACK_LANGUAGES.map((lang) => h("option", { value: lang }, lang))
+            );
+            select.value = d.backLanguage;
+            return h(
               "div",
-              { style: { display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" } },
-              ...languages.map((lang) => h("div", { class: "tap chip", style: Object.assign({ padding: "5px 11px", borderRadius: "9999px", fontSize: "12.5px" }, chipStyle(d.backLanguage === lang)), onclick: () => { d.backLanguage = lang; render(); } }, lang))
-            )
-          ),
+              { style: { height: "46px", borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 15px", gap: "10px" } },
+              h("span", { style: { fontSize: "12.5px", color: "#5e5d59" } }, "Back-card language"),
+              select
+            );
+          })(),
           h("textarea", {
-            rows: "3", value: d.description, placeholder: "Describe this tag for other learners…",
+            "data-field": "shareDescription", rows: "3", value: d.description, placeholder: "Describe this tag for other learners…",
             style: { borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", padding: "12px 15px", fontSize: "14px", color: "#141413", resize: "none" },
             oninput: (e) => { d.description = e.target.value.slice(0, 500); if (!e.isComposing) scheduleRender(); }, onblur: flushRender,
           }),

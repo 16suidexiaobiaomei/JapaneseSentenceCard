@@ -2909,7 +2909,7 @@
     else if (shared && shared.status === "active") { statusText += " · shared publicly"; }
     else if (shared && shared.status === "unpublished") { statusText += " · unpublished"; }
     else if (count > 0 && eligible === 0) { statusText += " · downloaded from the community"; }
-    else if (eligible < 50) { statusText += " · needs at least 50 original cards to share"; }
+    else if (eligible < 50) { statusText += " · " + eligible + " original card" + (eligible === 1 ? "" : "s") + " (<50)"; }
 
     const canToggleShare = shared ? shared.status !== "removed" : eligible >= 50;
     const isLive = shared && shared.status === "active";
@@ -3129,16 +3129,21 @@
                   fontSize: "14.5px", fontWeight: "500", color: "#141413",
                   textAlign: "right", textAlignLast: "right",
                   appearance: "none", WebkitAppearance: "none", MozAppearance: "none",
-                  height: "100%", lineHeight: "44px", padding: "0 18px 0 0", margin: "0",
+                  height: "100%", lineHeight: "32px", padding: "0 18px 0 0", margin: "0",
                 },
                 onchange: (e) => { d.backLanguage = e.target.value; render(); },
               },
               ...BACK_LANGUAGES.map((lang) => h("option", { value: lang }, lang))
             );
             select.value = d.backLanguage;
+            // iOS's own <select> keeps some built-in internal vertical
+            // padding that appearance:none doesn't fully strip, biasing
+            // its text upward inside a tall box no matter what
+            // line-height says. A shorter box leaves it less room to
+            // drift away from center.
             return h(
               "div",
-              { style: { height: "46px", borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 15px", gap: "10px" } },
+              { style: { height: "34px", borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 15px", gap: "10px" } },
               h("span", { style: { fontSize: "12.5px", color: "#5e5d59" } }, "Back-card language"),
               h(
                 "div",

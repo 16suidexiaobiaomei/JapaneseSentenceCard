@@ -245,7 +245,8 @@
     deleteTagSheet: null, // tag name while its delete-choice sheet is open
     myTagsLoading: false,
     myTagsShared: [], // this account's own shared_tags rows (any status), loaded from Supabase
-    myTagsFrozen: false, // profiles.sharing_frozen, loaded alongside
+    myTagsFrozen: false, // derived: profiles.sharing_frozen_until is still in the future
+    myTagsFrozenUntil: null, // Date, or null — when the account's sharing pause lifts
     renameTagSheet: null, // { oldName, newName } while the rename sheet is open
     shareDraft: null, // { tagName, selectedIds, backLanguage, description, busy, error } during the share flow
     communityLoading: false,
@@ -1010,6 +1011,10 @@
     return cardsMatchingTags([tag]).filter((c) => !c.sourceSharedTagId);
   }
 
+  function formatFrozenUntil(d) {
+    return d ? d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }) : "further notice";
+  }
+
   async function openMyTags() {
     go("myTags");
     ui.myTagsLoading = true;
@@ -1019,10 +1024,11 @@
     try {
       const [{ data: shared }, { data: prof }] = await Promise.all([
         sb.from("shared_tags").select("*").eq("owner_id", session.user.id),
-        sb.from("profiles").select("sharing_frozen").eq("id", session.user.id).maybeSingle(),
+        sb.from("profiles").select("sharing_frozen_until").eq("id", session.user.id).maybeSingle(),
       ]);
       ui.myTagsShared = shared || [];
-      ui.myTagsFrozen = !!(prof && prof.sharing_frozen);
+      ui.myTagsFrozenUntil = prof && prof.sharing_frozen_until ? new Date(prof.sharing_frozen_until) : null;
+      ui.myTagsFrozen = !!(ui.myTagsFrozenUntil && ui.myTagsFrozenUntil > new Date());
     } catch (e) {
       console.warn("loading My tags failed (offline?)", e);
     }
@@ -1193,7 +1199,7 @@
   // untouched. republishId tells submitShareTag() to update this row
   // in place instead of creating a new shared_tags row.
   function openReshareFlow(tagName, row) {
-    if (ui.myTagsFrozen) { alert("Sharing is paused on this account. Contact support@japanesesentencecards.com if you think this is a mistake."); return; }
+    if (ui.myTagsFrozen) { alert("Sharing is paused on this account until " + formatFrozenUntil(ui.myTagsFrozenUntil) + ". Contact support@japanesesentencecards.com if you think this is a mistake."); return; }
     const eligible = eligibleCardsForTag(tagName);
     ui.shareDraft = {
       tagName,
@@ -3122,7 +3128,7 @@
           ? h(
               "div",
               { style: { padding: "14px 16px", background: "#faf3f0", border: "1px solid #f0e2dc", borderRadius: "14px", fontSize: "12.5px", lineHeight: "1.6", color: "#8a4a35" } },
-              "Sharing is paused on this account after multiple shared tags were removed for violating community guidelines. Contact support@japanesesentencecards.com if you think this is a mistake."
+              "Sharing is paused on this account until " + formatFrozenUntil(ui.myTagsFrozenUntil) + " after multiple shared tags were removed for violating community guidelines. Contact support@japanesesentencecards.com if you think this is a mistake."
             )
           : null,
 

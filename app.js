@@ -2303,7 +2303,7 @@
           "div",
           { style: { display: "flex", alignItems: "center", gap: "9px", padding: "11px 14px", background: "#f5f4ed", border: "1px solid #e8e6dc", borderRadius: "12px" } },
           icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.5-4.5"/>', 15, "#87867f"),
-          h("input", { value: s.query, placeholder: "Find or create a tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14.5px", color: "#141413" }, oninput: (e) => { s.query = e.target.value; render(); } })
+          h("input", { "data-field": "bulkTagQuery", value: s.query, placeholder: "Find or create a tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14.5px", color: "#141413" }, oninput: (e) => { s.query = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: flushRender })
         ),
         pendingNew.length
           ? h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px" } }, ...pendingNew.map((t) => h("div", { class: "tap chip", style: Object.assign({ padding: "8px 13px", borderRadius: "9999px", fontSize: "13px", display: "flex", alignItems: "center", gap: "7px" }, chipStyle(true)), onclick: () => toggleBulkTagChecked(t) }, t, icon('<path d="M18 6L6 18M6 6l12 12"/>', 10, "#faf9f5"))))

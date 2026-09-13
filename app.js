@@ -238,6 +238,8 @@
     cropModal: null, // { imgSrc, natW, natH, zoom, offsetX, offsetY } while cropping a new profile photo
     heatmapTip: null, // { key, count } — the heatmap day currently hovered/tapped
     deletingAccount: false,
+    avatarSheetOpen: false,
+    emailCopiedFlash: false,
   };
 
   let recTimer = null;
@@ -1077,7 +1079,22 @@
   function openProfile() {
     ui.profileDraft = { username: data.profile.username, photo: data.profile.photo };
     ui.pwDraft = blankPasswordState();
+    ui.avatarSheetOpen = false;
     go("profile");
+  }
+
+  function copySupportEmail() {
+    const email = "support@japanesesentencecards.com";
+    const flash = () => {
+      ui.emailCopiedFlash = true;
+      render();
+      setTimeout(() => { ui.emailCopiedFlash = false; render(); }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(email).then(flash).catch(() => alert("Couldn't copy — email us at " + email));
+    } else {
+      alert("Email us at " + email);
+    }
   }
 
   function cancelProfile() {
@@ -2230,6 +2247,42 @@
     );
   }
 
+  function chevronNode() {
+    return h("div", { style: { width: "7px", height: "7px", borderRight: "1.6px solid #b0aea5", borderBottom: "1.6px solid #b0aea5", transform: "rotate(-45deg)", flexShrink: "0" } });
+  }
+
+  function settingsRow(label, right, onclick) {
+    return h(
+      "div",
+      { class: onclick ? "tap" : "", style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 16px", gap: "12px" }, onclick: onclick || null },
+      h("span", { style: { fontSize: "15.5px", color: "#141413", flexShrink: "0", whiteSpace: "nowrap" } }, label),
+      h("div", { style: { display: "flex", alignItems: "center", gap: "10px", minWidth: "0" } }, right)
+    );
+  }
+
+  function centeredRow(label, color, onclick) {
+    return h("div", { class: onclick ? "tap" : "", style: { padding: "15px 16px", textAlign: "center", fontSize: "15.5px", color }, onclick: onclick || null }, label);
+  }
+
+  function settingsCard(...rows) {
+    const withSeps = [];
+    rows.forEach((r, i) => {
+      if (i) withSeps.push(h("div", { style: { height: "1px", background: "#f0eee6", marginLeft: "16px" } }));
+      withSeps.push(r);
+    });
+    return h("div", { style: { background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px", overflow: "hidden" } }, ...withSeps);
+  }
+
+  function subScreenHeader(title, onBack) {
+    return h(
+      "div",
+      { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
+      h("div", { class: "tap", style: { fontSize: "14px", color: "#5e5d59" }, onclick: onBack }, "Cancel"),
+      h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, title),
+      h("div", { style: { width: "42px" } })
+    );
+  }
+
   function screenProfile() {
     const d = ui.profileDraft;
 
@@ -2238,9 +2291,27 @@
       onchange: (e) => { const f = e.target.files && e.target.files[0]; if (f) handlePhotoFile(f); e.target.value = ""; },
     });
 
+    const sheet = ui.avatarSheetOpen
+      ? h(
+          "div",
+          { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "12px", zIndex: "20" }, onclick: () => { ui.avatarSheetOpen = false; render(); } },
+          h(
+            "div",
+            { style: { background: "#faf9f5", borderRadius: "18px", overflow: "hidden", marginBottom: "10px" }, onclick: (e) => e.stopPropagation() },
+            h("div", { style: { padding: "13px 16px 12px", textAlign: "center", fontSize: "12.5px", color: "#87867f" } }, "Profile photo"),
+            h("div", { style: { height: "1px", background: "#f0eee6" } }),
+            h("div", { class: "tap", style: { textAlign: "center", padding: "17px 16px", fontSize: "17px", fontWeight: "500" }, onclick: () => { ui.avatarSheetOpen = false; fileInput.click(); } }, "Change photo"),
+            d.photo
+              ? h("div", {}, h("div", { style: { height: "1px", background: "#f0eee6" } }), h("div", { class: "tap", style: { textAlign: "center", padding: "17px 16px", fontSize: "17px", color: "#c96442" }, onclick: () => { d.photo = null; ui.avatarSheetOpen = false; render(); } }, "Remove photo"))
+              : null
+          ),
+          h("div", { class: "tap", style: { background: "#faf9f5", borderRadius: "18px", padding: "17px 16px", textAlign: "center", fontSize: "17px", fontWeight: "500" } }, "Cancel")
+        )
+      : null;
+
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
 
       h(
         "div",
@@ -2252,39 +2323,73 @@
 
       h(
         "div",
-        { style: { padding: "18px 20px 0", fontSize: "14px", lineHeight: "1.6", color: "#5e5d59", fontStyle: "italic" } },
-        "We'll greet you by username. Add a photo if you'd like — it follows you to any device you log in on."
-      ),
+        { style: { flex: "1", display: "flex", flexDirection: "column", padding: "0 20px", gap: "22px" } },
 
-      h(
-        "div",
-        { style: { margin: "22px 20px 0", display: "flex", alignItems: "center", gap: "14px" } },
-        avatarNode(d, 72),
-        fileInput,
         h(
           "div",
-          { class: "tap", style: { padding: "12px 18px", borderRadius: "12px", background: "#faf9f5", border: "1px solid #f0eee6", fontSize: "14px", color: "#141413" }, onclick: () => fileInput.click() },
-          d.photo ? "Change photo" : "Upload photo"
+          { style: { display: "flex", flexDirection: "column", alignItems: "center", gap: "14px", padding: "22px 0 6px" } },
+          h(
+            "div",
+            { class: "tap", style: { position: "relative" }, onclick: () => { ui.avatarSheetOpen = true; render(); } },
+            avatarNode(d, 96),
+            h(
+              "div",
+              { style: { position: "absolute", right: "-2px", bottom: "-2px", width: "30px", height: "30px", borderRadius: "9999px", background: "#141413", border: "2.5px solid #f5f4ed", display: "flex", alignItems: "center", justifyContent: "center" } },
+              icon('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.2"/>', 14, "#f5f4ed")
+            )
+          ),
+          h("input", {
+            "data-field": "profileUsername", value: d.username, placeholder: "Your username",
+            style: { width: "220px", border: "none", outline: "none", background: "transparent", textAlign: "center", fontFamily: "var(--serif)", fontSize: "28px", fontWeight: "500", color: "#141413", padding: "2px 8px 7px", borderBottom: "1.5px dashed #d1cfc5" },
+            oninput: (e) => { d.username = e.target.value; },
+            onblur: flushRender,
+          }),
+          fileInput
         ),
-        d.photo ? h("div", { class: "tap", style: { fontSize: "12.5px", color: "#5e5d59" }, onclick: () => { d.photo = null; render(); } }, "Remove") : null
+
+        settingsCard(
+          settingsRow(
+            "Membership",
+            [
+              h("span", { style: { flexShrink: "0", fontSize: "13px", fontWeight: "500", color: "#c96442", background: "#faf3f0", border: "1px solid #f0e2dc", borderRadius: "12px", padding: "3px 10px" } }, "Free plan"),
+              chevronNode(),
+            ],
+            () => go("membership")
+          ),
+          settingsRow("Change password", chevronNode(), () => go("changePassword")),
+          settingsRow(
+            "Contact us",
+            [
+              h("span", { style: { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "13.5px", color: ui.emailCopiedFlash ? "#3a9d5d" : "#87867f" } }, ui.emailCopiedFlash ? "Copied ✓" : "support@japanesesentencecards.com"),
+              chevronNode(),
+            ],
+            copySupportEmail
+          )
+        ),
+
+        settingsCard(
+          centeredRow("Log out", "#4d4c48", logOut),
+          centeredRow(ui.deletingAccount ? "Deleting account…" : "Delete account", ui.deletingAccount ? "#e0a89a" : "#c96442", ui.deletingAccount ? null : deleteAccount)
+        ),
+
+        h("div", { style: { marginTop: "auto", textAlign: "center", fontSize: "11.5px", color: "#b0aea5", letterSpacing: ".3px", padding: "20px 0" } }, "Japanese Sentence Card · v1.0")
       ),
+
+      sheet
+    );
+  }
+
+  function screenChangePassword() {
+    return h(
+      "div",
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+
+      subScreenHeader("Change password", () => go("profile")),
 
       h(
         "div",
         { style: { padding: "24px 20px 0" } },
-        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Username"),
-        h("input", {
-          "data-field": "profileUsername", value: d.username, placeholder: "Your username",
-          style: { marginTop: "10px", width: "100%", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "19px", color: "#141413" },
-          oninput: (e) => { d.username = e.target.value; },
-          onblur: flushRender,
-        })
-      ),
-
-      h(
-        "div",
-        { style: { padding: "30px 20px 0" } },
-        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Change password"),
+        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "New password"),
         h("input", {
           "data-field": "pwNew", type: "password", value: ui.pwDraft.password, placeholder: "New password",
           style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" },
@@ -2300,28 +2405,27 @@
         ui.pwDraft.error ? h("div", { style: { marginTop: "8px", fontSize: "12px", color: "#c96442" } }, ui.pwDraft.error) : null,
         h(
           "div",
-          { class: ui.pwDraft.password && !ui.pwDraft.busy ? "tap" : "", style: { marginTop: "10px", padding: "13px", borderRadius: "12px", textAlign: "center", background: "#f0eee6", color: "#141413", fontSize: "13.5px", fontWeight: "500" }, onclick: ui.pwDraft.password && !ui.pwDraft.busy ? changePassword : null },
+          { class: ui.pwDraft.password && !ui.pwDraft.busy ? "tap" : "", style: { marginTop: "10px", padding: "13px", borderRadius: "12px", textAlign: "center", background: ui.pwDraft.password && !ui.pwDraft.busy ? "#c96442" : "#f0eee6", color: ui.pwDraft.password && !ui.pwDraft.busy ? "#faf9f5" : "#141413", fontSize: "13.5px", fontWeight: "500" }, onclick: ui.pwDraft.password && !ui.pwDraft.busy ? changePassword : null },
           ui.pwDraft.busy ? "Updating…" : "Update password"
         )
-      ),
+      )
+    );
+  }
+
+  function screenMembership() {
+    return h(
+      "div",
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+
+      subScreenHeader("Membership", () => go("profile")),
 
       h(
         "div",
-        { style: { padding: "30px 20px 0" } },
-        h("div", { class: "tap", style: { padding: "14px", borderRadius: "12px", textAlign: "center", border: "1px solid #f0eee6", color: "#5e5d59", fontSize: "13.5px" }, onclick: logOut }, "Log out")
-      ),
-
-      h(
-        "div",
-        { style: { padding: "14px 20px 0" } },
-        h(
-          "div",
-          { class: ui.deletingAccount ? "" : "tap", style: { padding: "14px", borderRadius: "12px", textAlign: "center", color: ui.deletingAccount ? "#e0a89a" : "#c96442", fontSize: "13.5px" }, onclick: ui.deletingAccount ? null : deleteAccount },
-          ui.deletingAccount ? "Deleting account…" : "Delete account"
-        )
-      ),
-
-      h("div", { style: { height: "40px" } })
+        { style: { flex: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px", textAlign: "center", gap: "10px" } },
+        h("span", { style: { fontSize: "13px", fontWeight: "500", color: "#c96442", background: "#faf3f0", border: "1px solid #f0e2dc", borderRadius: "12px", padding: "4px 12px" } }, "Free plan"),
+        h("div", { style: { marginTop: "10px", fontFamily: "var(--serif)", fontSize: "20px", color: "#141413" } }, "More plans are coming soon."),
+        h("div", { style: { fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } }, "Everyone's on the Free plan for now — nothing to do here yet.")
+      )
     );
   }
 
@@ -2384,6 +2488,8 @@
       case "browse": content = screenBrowse(); break;
       case "add": content = screenAdd(); break;
       case "profile": content = screenProfile(); break;
+      case "changePassword": content = screenChangePassword(); break;
+      case "membership": content = screenMembership(); break;
       default: content = screenHome();
     }
 

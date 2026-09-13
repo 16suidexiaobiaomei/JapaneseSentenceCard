@@ -1087,7 +1087,7 @@
   }
 
   async function openTagDetail(row) {
-    ui.tagDetail = { row, previewCards: [], loading: true };
+    ui.tagDetail = { row, previewCards: [], loading: true, reportOpen: false, reportReason: null, reportDetail: "", reportBusy: false, reportError: "", reportSubmitted: false };
     go("tagDetail");
     try {
       const { data: cards } = await sb.from("shared_tag_cards").select("front, back").eq("shared_tag_id", row.id).order("sort_order").limit(10);
@@ -2827,7 +2827,17 @@
       h(
         "div",
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
-        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15.5px", color: "#5e5d59" }, onclick: () => { ui.tagDetail = null; go("community"); } }, icon('<path d="M15 18l-6-6 6-6"/>', 15, "#5e5d59"), "Community")
+        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15.5px", color: "#5e5d59" }, onclick: () => { ui.tagDetail = null; go("community"); } }, icon('<path d="M15 18l-6-6 6-6"/>', 15, "#5e5d59"), "Community"),
+        // Reporting your own tag isn't a meaningful action, so the
+        // entry point just isn't shown on it.
+        row.owner_id !== data.userId
+          ? h(
+              "div",
+              { class: t.reportSubmitted ? "" : "tap", style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "13.5px", color: "#87867f" }, onclick: t.reportSubmitted ? null : openReportSheet },
+              icon('<path d="M12 9v4.5M12 17h.01M10.3 4.1 2.6 17.4A1.8 1.8 0 0 0 4.2 20h15.6a1.8 1.8 0 0 0 1.6-2.6L13.7 4.1a1.9 1.9 0 0 0-3.4 0z"/>', 15, "#87867f"),
+              t.reportSubmitted ? "Reported" : "Report"
+            )
+          : null
       ),
 
       h(
@@ -2896,7 +2906,94 @@
             )
       ),
 
-      ui.downloadDraft ? downloadDraftSheetNode() : null
+      ui.downloadDraft ? downloadDraftSheetNode() : null,
+      t.reportOpen ? reportSheetNode() : null
+    );
+  }
+
+  const REPORT_REASONS = [
+    { value: "sensitive_content", label: "Sensitive or adult content" },
+    { value: "violence_hate", label: "Violence or hateful language" },
+    { value: "spam_or_misleading", label: "Spam, ads, or a misleading tag" },
+    { value: "low_quality", label: "Repeated or irrelevant content" },
+  ];
+
+  function openReportSheet() {
+    const t = ui.tagDetail;
+    t.reportOpen = true;
+    t.reportReason = null;
+    t.reportDetail = "";
+    t.reportError = "";
+    render();
+  }
+
+  function closeReportSheet() {
+    ui.tagDetail.reportOpen = false;
+    render();
+  }
+
+  async function submitReport() {
+    const t = ui.tagDetail;
+    if (!t.reportReason || t.reportBusy) return;
+    t.reportBusy = true;
+    t.reportError = "";
+    render();
+    const { error } = await sb.rpc("report_shared_tag", { p_shared_tag_id: t.row.id, p_reason: t.reportReason, p_detail: t.reportDetail.trim() });
+    t.reportBusy = false;
+    if (error) { t.reportError = error.message; render(); return; }
+    t.reportOpen = false;
+    t.reportSubmitted = true;
+    render();
+  }
+
+  function reportSheetNode() {
+    const t = ui.tagDetail;
+    return h(
+      "div",
+      { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "12px", zIndex: "20" }, onclick: closeReportSheet },
+      h(
+        "div",
+        { style: { background: "#faf9f5", borderRadius: "22px 22px 18px 18px", padding: "20px 20px 22px", display: "flex", flexDirection: "column", gap: "16px" }, onclick: (e) => e.stopPropagation() },
+        h(
+          "div",
+          { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+          h("span", { style: { fontFamily: "var(--serif)", fontSize: "20px", fontWeight: "500" } }, "Report this tag"),
+          h("span", { class: "tap", style: { fontSize: "14.5px", color: "#5e5d59" }, onclick: closeReportSheet }, "Cancel")
+        ),
+        h("p", { style: { margin: "0", fontSize: "13.5px", lineHeight: "1.55", color: "#5e5d59" } }, "Tell us what's wrong. Reported tags are hidden from the feed while we review them."),
+        h(
+          "div",
+          { style: { background: "#f5f4ed", borderRadius: "14px", overflow: "hidden" } },
+          ...REPORT_REASONS.map((r, i) =>
+            h(
+              "div",
+              {},
+              i ? h("div", { style: { height: "1px", background: "#e8e6dc" } }) : null,
+              h(
+                "div",
+                { class: "tap", style: { padding: "14px 15px", display: "flex", alignItems: "center", justifyContent: "space-between" }, onclick: () => { t.reportReason = r.value; render(); } },
+                h("span", { style: { fontSize: "15px", color: "#141413" } }, r.label),
+                h(
+                  "div",
+                  { style: { width: "19px", height: "19px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: t.reportReason === r.value ? "#c96442" : "transparent", border: t.reportReason === r.value ? "none" : "1.6px solid #d1cfc5" } },
+                  t.reportReason === r.value ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "#faf9f5", { "stroke-width": "3.4" }) : null
+                )
+              )
+            )
+          )
+        ),
+        h("textarea", {
+          "data-field": "reportDetail", rows: "3", placeholder: "Add detail (optional)",
+          style: { borderRadius: "12px", background: "#f5f4ed", border: "1px solid #e8e6dc", padding: "13px 15px", fontSize: "14px", color: "#141413", resize: "none" },
+          oninput: (e) => { t.reportDetail = e.target.value.slice(0, 500); }, onblur: flushRender,
+        }, t.reportDetail),
+        t.reportError ? h("div", { style: { fontSize: "12.5px", color: "#c96442" } }, t.reportError) : null,
+        h(
+          "div",
+          { class: t.reportReason && !t.reportBusy ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: t.reportReason && !t.reportBusy ? "#b53333" : "#f0eee6", color: t.reportReason && !t.reportBusy ? "#faf9f5" : "#b0aea5" }, onclick: t.reportReason && !t.reportBusy ? submitReport : null },
+          t.reportBusy ? "Submitting…" : "Submit report"
+        )
+      )
     );
   }
 

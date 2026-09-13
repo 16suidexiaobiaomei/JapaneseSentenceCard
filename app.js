@@ -243,6 +243,11 @@
     selectedIds: [],
     bulkTagSheet: null, // { query, checked: [] } while the "add tag to N cards" sheet is open
     deleteTagSheet: null, // tag name while its delete-choice sheet is open
+    myTagsLoading: false,
+    myTagsShared: [], // this account's own shared_tags rows (any status), loaded from Supabase
+    myTagsFrozen: false, // profiles.sharing_frozen, loaded alongside
+    renameTagSheet: null, // { oldName, newName } while the rename sheet is open
+    shareDraft: null, // { tagName, selectedIds, backLanguage, description, busy, error } during the share flow
   };
 
   let recTimer = null;
@@ -470,6 +475,7 @@
       lastReviewAt: row.last_review_at ? new Date(row.last_review_at).getTime() : null,
       dueAt: new Date(row.due_at).getTime(),
       audio: row.audio,
+      sourceSharedTagId: row.source_shared_tag_id || null,
       createdAt: new Date(row.created_at).getTime(),
       updatedAt: new Date(row.updated_at).getTime(),
     };
@@ -983,6 +989,134 @@
     saveData();
     render();
     pushCardsBulk(affected);
+  }
+
+  // ---------------------------------------------------------------------
+  // Community — My tags (rename, share) and the share flow.
+  //
+  // Cards downloaded from the community carry source_shared_tag_id, so
+  // they never count toward "eligible" here — matches the server-side
+  // check in share_tag(), which would reject them anyway; this just
+  // means the user sees why up front instead of a rejected submission.
+  // ---------------------------------------------------------------------
+
+  function eligibleCardsForTag(tag) {
+    return cardsMatchingTags([tag]).filter((c) => !c.sourceSharedTagId);
+  }
+
+  async function openMyTags() {
+    go("myTags");
+    ui.myTagsLoading = true;
+    render();
+    const session = await getSessionSafe();
+    if (!session) { ui.myTagsLoading = false; render(); return; }
+    try {
+      const [{ data: shared }, { data: prof }] = await Promise.all([
+        sb.from("shared_tags").select("*").eq("owner_id", session.user.id),
+        sb.from("profiles").select("sharing_frozen").eq("id", session.user.id).maybeSingle(),
+      ]);
+      ui.myTagsShared = shared || [];
+      ui.myTagsFrozen = !!(prof && prof.sharing_frozen);
+    } catch (e) {
+      console.warn("loading My tags failed (offline?)", e);
+    }
+    ui.myTagsLoading = false;
+    render();
+  }
+
+  // Tags aren't a separate registry (see deleteTag() above) and neither
+  // is the link to a shared_tags row — matched by name instead. Nothing
+  // stops sharing the same name twice (no unique constraint), so this
+  // prefers whichever matching row is most recent.
+  function sharedRowForTag(tag) {
+    const matches = ui.myTagsShared.filter((r) => r.name === tag);
+    if (!matches.length) return null;
+    return matches.reduce((a, b) => (new Date(b.created_at) > new Date(a.created_at) ? b : a));
+  }
+
+  async function toggleUnshareTag(row) {
+    const goingLive = row.status === "unpublished";
+    if (goingLive && ui.myTagsFrozen) { alert("Sharing is paused on this account. Contact support@japanesesentencecards.com if you think this is a mistake."); return; }
+    if (!confirm(goingLive ? 'Share "' + row.name + '" with the community again?' : 'Stop sharing "' + row.name + '"? People who already added it keep their copy.')) return;
+    const { error } = await sb.from("shared_tags").update({ status: goingLive ? "active" : "unpublished" }).eq("id", row.id);
+    if (error) { alert(goingLive ? "Couldn't re-share this tag — sharing may be paused on this account." : "Couldn't update sharing: " + error.message); return; }
+    row.status = goingLive ? "active" : "unpublished";
+    render();
+  }
+
+  function openRenameTagSheet(oldName) {
+    ui.renameTagSheet = { oldName, newName: oldName };
+    render();
+  }
+
+  function closeRenameTagSheet() {
+    ui.renameTagSheet = null;
+    render();
+  }
+
+  function submitRenameTag() {
+    const s = ui.renameTagSheet;
+    const newName = s.newName.trim();
+    if (!newName || newName === s.oldName) { closeRenameTagSheet(); return; }
+    if (browsableTags().includes(newName)) { alert('You already have a tag called "' + newName + '".'); return; }
+    const affected = [];
+    data.cards.forEach((c) => {
+      if (c.tags.includes(s.oldName)) {
+        c.tags = c.tags.map((t) => (t === s.oldName ? newName : t));
+        c.updatedAt = Date.now();
+        affected.push(c);
+      }
+    });
+    if (ui.filter === s.oldName) ui.filter = "All";
+    ui.renameTagSheet = null;
+    saveData();
+    render();
+    pushCardsBulk(affected);
+  }
+
+  function openShareFlow(tagName) {
+    const eligible = eligibleCardsForTag(tagName);
+    ui.shareDraft = {
+      tagName,
+      selectedIds: eligible.map((c) => c.id),
+      backLanguage: "English",
+      description: "",
+      busy: false,
+      error: "",
+    };
+    go("shareTag");
+  }
+
+  function toggleShareCardSelected(id) {
+    const d = ui.shareDraft;
+    d.selectedIds = d.selectedIds.includes(id) ? d.selectedIds.filter((x) => x !== id) : d.selectedIds.concat(id);
+    render();
+  }
+
+  function toggleShareSelectAll(eligibleIds) {
+    const d = ui.shareDraft;
+    const allSelected = eligibleIds.length > 0 && eligibleIds.every((id) => d.selectedIds.includes(id));
+    d.selectedIds = allSelected ? [] : eligibleIds.slice();
+    render();
+  }
+
+  async function submitShareTag() {
+    const d = ui.shareDraft;
+    if (d.busy || d.selectedIds.length < 50) return;
+    d.busy = true;
+    d.error = "";
+    render();
+    const { data: newId, error } = await sb.rpc("share_tag", {
+      p_name: d.tagName,
+      p_description: d.description.trim(),
+      p_back_language: d.backLanguage,
+      p_card_ids: d.selectedIds,
+    });
+    d.busy = false;
+    if (error) { d.error = error.message; render(); return; }
+    ui.shareDraft = null;
+    alert('"' + d.tagName + '" is now shared with the community.');
+    openMyTags();
   }
 
   function toggleDraftTag(t) {
@@ -2383,7 +2517,12 @@
       "div",
       { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
 
-      h("div", { style: { padding: "8px 20px 0", fontFamily: "var(--serif)", fontSize: "28px", color: "#141413" } }, "Community"),
+      h(
+        "div",
+        { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", color: "#141413" } }, "Community"),
+        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "13.5px", fontWeight: "500", color: "#c96442" }, onclick: openMyTags }, "My tags", chevronNode())
+      ),
 
       h(
         "div",
@@ -2393,6 +2532,222 @@
       ),
 
       bottomNav("community")
+    );
+  }
+
+  function myTagRow(t) {
+    const count = cardsMatchingTags([t]).length;
+    const eligible = eligibleCardsForTag(t).length;
+    const shared = sharedRowForTag(t);
+
+    let statusText = count + " card" + (count === 1 ? "" : "s");
+    let statusColor = "#87867f";
+    if (shared && shared.status === "removed") { statusText = "Removed after being reported"; statusColor = "#b53333"; }
+    else if (shared && shared.status === "active") { statusText += " · shared publicly"; }
+    else if (shared && shared.status === "unpublished") { statusText += " · unpublished"; }
+    else if (eligible < 50) { statusText += " · needs at least 50 to share"; }
+
+    const canToggleShare = shared ? shared.status !== "removed" : eligible >= 50;
+    const isLive = shared && shared.status === "active";
+
+    return h(
+      "div",
+      { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 15px", gap: "10px" } },
+      h(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "3px", minWidth: "0" } },
+        h("span", { style: { fontSize: "15.5px", fontWeight: "500", color: "#141413" } }, t),
+        h("span", { style: { fontSize: "12px", color: statusColor } }, statusText)
+      ),
+      h(
+        "div",
+        { style: { display: "flex", gap: "15px", alignItems: "center", flexShrink: "0" } },
+        h(
+          "div",
+          { class: canToggleShare ? "tap" : "", onclick: canToggleShare ? (shared ? () => toggleUnshareTag(shared) : () => openShareFlow(t)) : null },
+          icon('<path d="M12 16V4m0 0 4 4m-4-4-4 4M4 18v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1"/>', 17, isLive ? "#5e5d59" : canToggleShare ? "#c96442" : "#d1cfc5")
+        ),
+        h(
+          "div",
+          { class: "tap", onclick: () => openRenameTagSheet(t) },
+          icon('<path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4"/>', 17, "#5e5d59")
+        )
+      )
+    );
+  }
+
+  function renameTagSheetNode() {
+    const s = ui.renameTagSheet;
+    return h(
+      "div",
+      { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", alignItems: "center", justifyContent: "center", padding: "26px", zIndex: "20" }, onclick: closeRenameTagSheet },
+      h(
+        "div",
+        { style: { width: "100%", background: "#faf9f5", borderRadius: "20px", padding: "22px 20px", display: "flex", flexDirection: "column", gap: "14px" }, onclick: (e) => e.stopPropagation() },
+        h("span", { style: { fontFamily: "var(--serif)", fontSize: "20px", fontWeight: "500" } }, "Rename this tag"),
+        h("input", {
+          value: s.newName,
+          style: { height: "50px", borderRadius: "12px", background: "#f5f4ed", border: "1.5px solid #c96442", padding: "0 15px", fontFamily: "var(--serif)", fontSize: "17px", color: "#141413" },
+          oninput: (e) => { s.newName = e.target.value; },
+          onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); submitRenameTag(); } },
+        }),
+        h(
+          "div",
+          { style: { display: "flex", gap: "10px", marginTop: "2px" } },
+          h("div", { class: "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "#e8e6dc", color: "#4d4c48", fontSize: "15px", fontWeight: "500" }, onclick: closeRenameTagSheet }, "Cancel"),
+          h("div", { class: "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "#141413", color: "#faf9f5", fontSize: "15px", fontWeight: "500" }, onclick: submitRenameTag }, "Save")
+        )
+      )
+    );
+  }
+
+  function screenMyTags() {
+    const tags = browsableTags().filter((t) => t !== UNTAGGED_TAG);
+
+    return h(
+      "div",
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
+
+      h(
+        "div",
+        { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", padding: "8px 20px 0", fontSize: "15.5px", color: "#5e5d59" }, onclick: () => go("community") },
+        icon('<path d="M15 18l-6-6 6-6"/>', 15, "#5e5d59"), "Community"
+      ),
+
+      h(
+        "div",
+        { style: { flex: "1", overflow: "auto", padding: "14px 20px 0", display: "flex", flexDirection: "column", gap: "20px" } },
+
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "27px", fontWeight: "500", color: "#141413" } }, "My tags"),
+
+        ui.myTagsFrozen
+          ? h(
+              "div",
+              { style: { padding: "14px 16px", background: "#faf3f0", border: "1px solid #f0e2dc", borderRadius: "14px", fontSize: "12.5px", lineHeight: "1.6", color: "#8a4a35" } },
+              "Sharing is paused on this account after multiple shared tags were removed for violating community guidelines. Contact support@japanesesentencecards.com if you think this is a mistake."
+            )
+          : null,
+
+        h(
+          "div",
+          { style: { display: "flex", flexDirection: "column", gap: "9px" } },
+          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, "Existing tags"),
+          ui.myTagsLoading
+            ? h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "Loading…")
+            : tags.length
+              ? settingsCard(...tags.map((t) => myTagRow(t)))
+              : h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "No tags yet — add some cards first.")
+        )
+      ),
+
+      ui.renameTagSheet ? renameTagSheetNode() : null
+    );
+  }
+
+  function screenShareTag() {
+    const d = ui.shareDraft;
+    const eligible = eligibleCardsForTag(d.tagName);
+    const eligibleIds = eligible.map((c) => c.id);
+    const allEligibleSelected = eligibleIds.length > 0 && eligibleIds.every((id) => d.selectedIds.includes(id));
+    const n = d.selectedIds.length;
+    const languages = ["Any", "English", "Chinese", "Korean"];
+
+    return h(
+      "div",
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+
+      h(
+        "div",
+        { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
+        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15.5px", color: "#5e5d59" }, onclick: () => { ui.shareDraft = null; go("myTags"); } }, icon('<path d="M15 18l-6-6 6-6"/>', 15, "#5e5d59"), "My tags"),
+        h("div", { class: "tap", style: { fontSize: "15px", color: "#5e5d59" }, onclick: () => { ui.shareDraft = null; go("myTags"); } }, "Cancel")
+      ),
+
+      h(
+        "div",
+        { style: { flex: "1", overflow: "auto", padding: "0 20px 18px", display: "flex", flexDirection: "column", gap: "16px" } },
+
+        h(
+          "div",
+          { style: { padding: "14px 0 0", display: "flex", flexDirection: "column", gap: "5px" } },
+          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, "Share tag"),
+          h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", fontWeight: "500", color: "#141413" } }, d.tagName)
+        ),
+
+        h(
+          "div",
+          { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+          h(
+            "div",
+            { class: "tap chip", style: Object.assign({ display: "flex", alignItems: "center", gap: "7px", height: "32px", padding: "0 14px", borderRadius: "9999px", fontSize: "13.5px", fontWeight: "500" }, chipStyle(allEligibleSelected)), onclick: () => toggleShareSelectAll(eligibleIds) },
+            allEligibleSelected ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 13, "#faf9f5", { "stroke-width": "2.6" }) : null,
+            "All " + eligibleIds.length + " cards"
+          ),
+          h("span", { style: { fontSize: "12px", color: "#87867f" } }, n + " of " + eligibleIds.length + " selected")
+        ),
+
+        h(
+          "div",
+          { style: { display: "flex", flexDirection: "column", gap: "9px" } },
+          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, "Cards in this tag"),
+          h(
+            "div",
+            { style: { background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px", overflow: "hidden" } },
+            ...cardsMatchingTags([d.tagName]).map((c, i) => {
+              const ineligible = !!c.sourceSharedTagId;
+              const checked = d.selectedIds.includes(c.id);
+              return h(
+                "div",
+                {},
+                i ? h("div", { style: { height: "1px", background: "#f0eee6" } }) : null,
+                h(
+                  "div",
+                  { class: ineligible ? "" : "tap", style: { padding: "12px 15px", display: "flex", alignItems: "center", gap: "12px", opacity: ineligible ? ".55" : "1" }, onclick: ineligible ? null : () => toggleShareCardSelected(c.id) },
+                  h(
+                    "div",
+                    { style: { width: "20px", height: "20px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: checked ? "#c96442" : "transparent", border: checked ? "none" : "1.6px solid #d1cfc5" } },
+                    checked ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "#faf9f5", { "stroke-width": "3.4" }) : null
+                  ),
+                  h(
+                    "div",
+                    { style: { display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" } },
+                    h("span", { style: { fontFamily: "var(--jp)", fontSize: "14.5px", color: "#141413" } }, c.front),
+                    h("span", { style: { fontSize: "11.5px", color: "#87867f" } }, ineligible ? "From community — can't be shared" : c.back)
+                  )
+                )
+              );
+            })
+          )
+        ),
+
+        h(
+          "div",
+          { style: { display: "flex", flexDirection: "column", gap: "9px" } },
+          h(
+            "div",
+            { style: { height: "46px", borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 15px", gap: "10px" } },
+            h("span", { style: { fontSize: "12.5px", color: "#5e5d59" } }, "Back-card language"),
+            h(
+              "div",
+              { style: { display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" } },
+              ...languages.map((lang) => h("div", { class: "tap chip", style: Object.assign({ padding: "5px 11px", borderRadius: "9999px", fontSize: "12.5px" }, chipStyle(d.backLanguage === lang)), onclick: () => { d.backLanguage = lang; render(); } }, lang))
+            )
+          ),
+          h("textarea", {
+            rows: "3", value: d.description, placeholder: "Describe this tag for other learners…",
+            style: { borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", padding: "12px 15px", fontSize: "14px", color: "#141413", resize: "none" },
+            oninput: (e) => { d.description = e.target.value.slice(0, 500); if (!e.isComposing) scheduleRender(); }, onblur: flushRender,
+          }),
+          h("span", { style: { fontSize: "11.5px", color: "#b0aea5", textAlign: "right" } }, d.description.length + " / 500"),
+          d.error ? h("div", { style: { fontSize: "12.5px", color: "#c96442" } }, d.error) : null,
+          h(
+            "div",
+            { class: n >= 50 && !d.busy ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: n >= 50 && !d.busy ? "#141413" : "#f0eee6", color: n >= 50 && !d.busy ? "#faf9f5" : "#b0aea5" }, onclick: n >= 50 && !d.busy ? submitShareTag : null },
+            d.busy ? "Sharing…" : "Share " + n + " cards"
+          ),
+          h("span", { style: { fontSize: "11.5px", color: "#b0aea5", textAlign: "center" } }, "At least 50 cards are needed to share a tag.")
+        )
+      )
     );
   }
 
@@ -2790,6 +3145,8 @@
       case "browse": content = screenBrowse(); break;
       case "add": content = screenAdd(); break;
       case "community": content = screenCommunity(); break;
+      case "myTags": content = screenMyTags(); break;
+      case "shareTag": content = screenShareTag(); break;
       case "profile": content = screenProfile(); break;
       case "changePassword": content = screenChangePassword(); break;
       case "membership": content = screenMembership(); break;

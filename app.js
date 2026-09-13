@@ -2729,7 +2729,7 @@
               ...chips.map((lang) =>
                 h(
                   "div",
-                  { class: "tap chip", style: Object.assign({ height: "30px", padding: "0 13px", borderRadius: "9999px", fontSize: "12.5px", fontWeight: "500", flexShrink: "0", whiteSpace: "nowrap" }, chipStyle(ui.communityLangFilter === lang)), onclick: () => { ui.communityLangFilter = lang; render(); } },
+                  { class: "tap chip", style: Object.assign({ display: "flex", alignItems: "center", justifyContent: "center", height: "30px", padding: "0 13px", borderRadius: "9999px", fontSize: "12.5px", fontWeight: "500", flexShrink: "0", whiteSpace: "nowrap" }, chipStyle(ui.communityLangFilter === lang)), onclick: () => { ui.communityLangFilter = lang; render(); } },
                   lang
                 )
               )

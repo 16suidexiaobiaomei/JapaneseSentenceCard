@@ -2909,7 +2909,7 @@
     else if (shared && shared.status === "active") { statusText += " · shared publicly"; }
     else if (shared && shared.status === "unpublished") { statusText += " · unpublished"; }
     else if (count > 0 && eligible === 0) { statusText += " · downloaded from the community"; }
-    else if (eligible < 50) { statusText += " · needs at least 50 to share"; }
+    else if (eligible < 50) { statusText += " · needs at least 50 original cards to share"; }
 
     const canToggleShare = shared ? shared.status !== "removed" : eligible >= 50;
     const isLive = shared && shared.status === "active";
@@ -3116,9 +3116,23 @@
           "div",
           { style: { display: "flex", flexDirection: "column", gap: "9px" } },
           (() => {
+            // appearance:none drops the OS's own disclosure triangle —
+            // its native vertical position sat noticeably above center
+            // rather than lined up with the text — in favor of a
+            // custom chevron below that's actually centered against
+            // the select's own line-height.
             const select = h(
               "select",
-              { style: { border: "none", outline: "none", background: "transparent", fontSize: "14.5px", fontWeight: "500", color: "#141413", textAlign: "right" }, onchange: (e) => { d.backLanguage = e.target.value; render(); } },
+              {
+                style: {
+                  border: "none", outline: "none", background: "transparent",
+                  fontSize: "14.5px", fontWeight: "500", color: "#141413",
+                  textAlign: "right", textAlignLast: "right",
+                  appearance: "none", WebkitAppearance: "none", MozAppearance: "none",
+                  height: "100%", lineHeight: "44px", padding: "0 18px 0 0", margin: "0",
+                },
+                onchange: (e) => { d.backLanguage = e.target.value; render(); },
+              },
               ...BACK_LANGUAGES.map((lang) => h("option", { value: lang }, lang))
             );
             select.value = d.backLanguage;
@@ -3126,7 +3140,12 @@
               "div",
               { style: { height: "46px", borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 15px", gap: "10px" } },
               h("span", { style: { fontSize: "12.5px", color: "#5e5d59" } }, "Back-card language"),
-              select
+              h(
+                "div",
+                { style: { position: "relative", display: "flex", alignItems: "center", flex: "1", justifyContent: "flex-end", minWidth: "0" } },
+                select,
+                h("div", { style: { position: "absolute", right: "0", top: "0", bottom: "0", display: "flex", alignItems: "center", pointerEvents: "none" } }, icon('<path d="m6 9 6 6 6-6"/>', 13, "#87867f"))
+              )
             );
           })(),
           h("textarea", {
@@ -3145,7 +3164,7 @@
             { class: n >= 50 && !d.busy ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: n >= 50 && !d.busy ? "#141413" : "#f0eee6", color: n >= 50 && !d.busy ? "#faf9f5" : "#b0aea5" }, onclick: n >= 50 && !d.busy ? submitShareTag : null },
             d.busy ? (d.republishId ? "Re-sharing…" : "Sharing…") : (d.republishId ? "Re-share " : "Share ") + n + " cards"
           ),
-          h("span", { style: { fontSize: "11.5px", color: "#b0aea5", textAlign: "center" } }, "At least 50 cards are needed to share a tag.")
+          h("span", { style: { fontSize: "11.5px", color: "#b0aea5", textAlign: "center" } }, "At least 50 original cards are needed to share a tag.")
         )
       )
     );

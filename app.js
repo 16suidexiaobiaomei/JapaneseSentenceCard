@@ -1182,6 +1182,7 @@
       busy: false,
       error: "",
       republishId: null,
+      langSheetOpen: false,
     };
     go("shareTag");
   }
@@ -1202,6 +1203,7 @@
       busy: false,
       error: "",
       republishId: row.id,
+      langSheetOpen: false,
     };
     go("shareTag");
   }
@@ -2908,7 +2910,7 @@
     if (shared && shared.status === "removed") { statusText = "Removed after being reported"; statusColor = "#b53333"; }
     else if (shared && shared.status === "active") { statusText += " · shared publicly"; }
     else if (shared && shared.status === "unpublished") { statusText += " · unpublished"; }
-    else if (count > 0 && eligible === 0) { statusText += " · downloaded from the community"; }
+    else if (count > 0 && eligible === 0) { /* no suffix — the "Downloaded" section heading already says this */ }
     else if (eligible < 50) { statusText += " · " + eligible + " original card" + (eligible === 1 ? "" : "s") + " (<50)"; }
 
     const canToggleShare = shared ? shared.status !== "removed" : eligible >= 50;
@@ -3046,7 +3048,7 @@
     const n = d.selectedIds.length;
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
 
       h(
         "div",
@@ -3115,44 +3117,24 @@
         h(
           "div",
           { style: { display: "flex", flexDirection: "column", gap: "9px" } },
-          (() => {
-            // appearance:none drops the OS's own disclosure triangle —
-            // its native vertical position sat noticeably above center
-            // rather than lined up with the text — in favor of a
-            // custom chevron below that's actually centered against
-            // the select's own line-height.
-            const select = h(
-              "select",
-              {
-                style: {
-                  border: "none", outline: "none", background: "transparent",
-                  fontSize: "14.5px", fontWeight: "500", color: "#141413",
-                  textAlign: "right", textAlignLast: "right",
-                  appearance: "none", WebkitAppearance: "none", MozAppearance: "none",
-                  height: "100%", lineHeight: "32px", padding: "0 18px 0 0", margin: "0",
-                },
-                onchange: (e) => { d.backLanguage = e.target.value; render(); },
-              },
-              ...BACK_LANGUAGES.map((lang) => h("option", { value: lang }, lang))
-            );
-            select.value = d.backLanguage;
-            // iOS's own <select> keeps some built-in internal vertical
-            // padding that appearance:none doesn't fully strip, biasing
-            // its text upward inside a tall box no matter what
-            // line-height says. A shorter box leaves it less room to
-            // drift away from center.
-            return h(
+          // A native <select> kept its own internal vertical padding no
+          // matter what appearance/line-height/box-height said, biasing
+          // the text upward on real devices (and, it turns out, in the
+          // simulator too) — CSS just can't fully override that. A
+          // plain tappable row opening our own picker sheet sidesteps
+          // the OS's <select> rendering entirely, so the text is
+          // trivially centered like everything else in this app.
+          h(
+            "div",
+            { class: "tap", style: { height: "46px", borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 15px" }, onclick: () => { d.langSheetOpen = true; render(); } },
+            h("span", { style: { fontSize: "12.5px", color: "#5e5d59" } }, "Back-card language"),
+            h(
               "div",
-              { style: { height: "34px", borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 15px", gap: "10px" } },
-              h("span", { style: { fontSize: "12.5px", color: "#5e5d59" } }, "Back-card language"),
-              h(
-                "div",
-                { style: { position: "relative", display: "flex", alignItems: "center", flex: "1", justifyContent: "flex-end", minWidth: "0" } },
-                select,
-                h("div", { style: { position: "absolute", right: "0", top: "0", bottom: "0", display: "flex", alignItems: "center", pointerEvents: "none" } }, icon('<path d="m6 9 6 6 6-6"/>', 13, "#87867f"))
-              )
-            );
-          })(),
+              { style: { display: "flex", alignItems: "center", gap: "6px" } },
+              h("span", { style: { fontSize: "14.5px", fontWeight: "500", color: "#141413" } }, d.backLanguage),
+              icon('<path d="m6 9 6 6 6-6"/>', 13, "#87867f")
+            )
+          ),
           h("textarea", {
             "data-field": "shareDescription", rows: "3", placeholder: "Describe this tag for other learners…",
             style: { borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", padding: "12px 15px", fontSize: "14px", color: "#141413", resize: "none" },
@@ -3170,6 +3152,43 @@
             d.busy ? (d.republishId ? "Re-sharing…" : "Sharing…") : (d.republishId ? "Re-share " : "Share ") + n + " cards"
           ),
           h("span", { style: { fontSize: "11.5px", color: "#b0aea5", textAlign: "center" } }, "At least 50 original cards are needed to share a tag.")
+        )
+      ),
+
+      d.langSheetOpen ? backLanguageSheetNode() : null
+    );
+  }
+
+  function backLanguageSheetNode() {
+    const d = ui.shareDraft;
+    return h(
+      "div",
+      { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "12px", zIndex: "20" }, onclick: () => { d.langSheetOpen = false; render(); } },
+      h(
+        "div",
+        { style: { background: "#faf9f5", borderRadius: "18px", overflow: "hidden", marginBottom: "10px", maxHeight: "60vh", display: "flex", flexDirection: "column" }, onclick: (e) => e.stopPropagation() },
+        h(
+          "div",
+          { style: { padding: "15px 18px 13px", textAlign: "center", background: "#f5f4ed", flexShrink: "0" } },
+          h("span", { style: { fontSize: "12.5px", letterSpacing: ".4px", textTransform: "uppercase", color: "#87867f" } }, "Back-card language")
+        ),
+        h("div", { style: { height: "1px", background: "#f0eee6", flexShrink: "0" } }),
+        h(
+          "div",
+          { style: { overflow: "auto" } },
+          ...BACK_LANGUAGES.map((lang, i) =>
+            h(
+              "div",
+              {},
+              i ? h("div", { style: { height: "1px", background: "#f0eee6" } }) : null,
+              h(
+                "div",
+                { class: "tap", style: { padding: "15px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }, onclick: () => { d.backLanguage = lang; d.langSheetOpen = false; render(); } },
+                h("span", { style: { fontSize: "16px", color: "#141413" } }, lang),
+                lang === d.backLanguage ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 15, "#c96442", { "stroke-width": "3" }) : null
+              )
+            )
+          )
         )
       )
     );

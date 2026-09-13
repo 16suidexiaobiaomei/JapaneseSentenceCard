@@ -232,7 +232,6 @@
     auth: blankAuthState(),
     pwDraft: blankPasswordState(),
     activityRange: "all", // "all" | "30d" | "7d"
-    tagsEditMode: false,
     session: null, // { queue: [ids], qi, flipped, tags, results }
     cardSavedFlash: false,
     cropModal: null, // { imgSrc, natW, natH, zoom, offsetX, offsetY } while cropping a new profile photo
@@ -240,6 +239,10 @@
     deletingAccount: false,
     avatarSheetOpen: false,
     emailCopiedFlash: false,
+    selectMode: false, // Cards screen: multi-select for bulk tag/delete
+    selectedIds: [],
+    bulkTagSheet: null, // { query, checked: [] } while the "add tag to N cards" sheet is open
+    deleteTagSheet: null, // tag name while its delete-choice sheet is open
   };
 
   let recTimer = null;
@@ -852,15 +855,21 @@
     render();
   }
 
+  function openDeleteTagSheet(tag) {
+    if (tag === UNTAGGED_TAG) return;
+    ui.deleteTagSheet = tag;
+    render();
+  }
+
+  function closeDeleteTagSheet() {
+    ui.deleteTagSheet = null;
+    render();
+  }
+
   // Deleting a tag removes it from every card that has it (tags aren't a
   // separate registry — they're just whatever's on data.cards). A card left
   // with none falls back to UNTAGGED_TAG so it's never truly tag-less.
-  function deleteTag(tag) {
-    if (tag === UNTAGGED_TAG) return;
-    const count = data.cards.filter((c) => c.tags.includes(tag)).length;
-    const msg = 'Delete "' + tag + '"? It will be removed from ' + count + " card" + (count === 1 ? "" : "s")
-      + (count ? '. Any left with no tags will be marked "' + UNTAGGED_TAG + '".' : ".");
-    if (!confirm(msg)) return;
+  function deleteTagOnly(tag) {
     const affected = [];
     data.cards.forEach((c) => {
       if (c.tags.includes(tag)) {
@@ -872,6 +881,105 @@
     });
     ui.sel = ui.sel.filter((x) => x !== tag);
     if (ui.filter === tag) ui.filter = "All";
+    ui.deleteTagSheet = null;
+    saveData();
+    render();
+    pushCardsBulk(affected);
+  }
+
+  function deleteTagAndCards(tag) {
+    const toDelete = data.cards.filter((c) => c.tags.includes(tag));
+    data.cards = data.cards.filter((c) => !c.tags.includes(tag));
+    toDelete.forEach((c) => data.pendingDeletes.push(c.id));
+    ui.sel = ui.sel.filter((x) => x !== tag);
+    if (ui.filter === tag) ui.filter = "All";
+    ui.deleteTagSheet = null;
+    saveData();
+    render();
+    toDelete.forEach((c) => pushDeleteCard(c.id));
+  }
+
+  // ---------------------------------------------------------------------
+  // Cards screen — multi-select (bulk tag / bulk delete)
+  // ---------------------------------------------------------------------
+
+  function enterSelectMode() {
+    ui.selectMode = true;
+    ui.selectedIds = [];
+    render();
+  }
+
+  function exitSelectMode() {
+    ui.selectMode = false;
+    ui.selectedIds = [];
+    render();
+  }
+
+  function toggleCardSelected(id) {
+    ui.selectedIds = ui.selectedIds.includes(id) ? ui.selectedIds.filter((x) => x !== id) : ui.selectedIds.concat(id);
+    render();
+  }
+
+  function toggleSelectAll(visibleIds) {
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => ui.selectedIds.includes(id));
+    ui.selectedIds = allSelected ? [] : visibleIds.slice();
+    render();
+  }
+
+  function bulkDeleteSelected() {
+    if (!ui.selectedIds.length) return;
+    const n = ui.selectedIds.length;
+    if (!confirm("Delete " + n + " card" + (n === 1 ? "" : "s") + "? This can't be undone.")) return;
+    const ids = ui.selectedIds.slice();
+    data.cards = data.cards.filter((c) => !ids.includes(c.id));
+    ids.forEach((id) => data.pendingDeletes.push(id));
+    exitSelectMode();
+    saveData();
+    render();
+    ids.forEach((id) => pushDeleteCard(id));
+  }
+
+  function openBulkTagSheet() {
+    if (!ui.selectedIds.length) return;
+    ui.bulkTagSheet = { query: "", checked: [] };
+    render();
+  }
+
+  function closeBulkTagSheet() {
+    ui.bulkTagSheet = null;
+    render();
+  }
+
+  function toggleBulkTagChecked(tag) {
+    const s = ui.bulkTagSheet;
+    s.checked = s.checked.includes(tag) ? s.checked.filter((x) => x !== tag) : s.checked.concat(tag);
+    render();
+  }
+
+  function createBulkTag() {
+    const s = ui.bulkTagSheet;
+    const t = s.query.trim();
+    if (!t) return;
+    if (!s.checked.includes(t)) s.checked = s.checked.concat(t);
+    s.query = "";
+    render();
+  }
+
+  function applyBulkTag() {
+    const s = ui.bulkTagSheet;
+    if (!s || !s.checked.length) return;
+    const ids = ui.selectedIds.slice();
+    const affected = [];
+    data.cards.forEach((c) => {
+      if (!ids.includes(c.id)) return;
+      let changed = false;
+      s.checked.forEach((t) => {
+        if (!c.tags.includes(t)) { c.tags = c.tags.filter((x) => x !== UNTAGGED_TAG).concat(t); changed = true; }
+      });
+      if (changed) { c.updatedAt = Date.now(); affected.push(c); }
+    });
+    ui.bulkTagSheet = null;
+    exitSelectMode();
     saveData();
     render();
     pushCardsBulk(affected);
@@ -929,9 +1037,8 @@
   }
 
   function cancelCardForm() {
-    const wasEditing = !!ui.draft.editingId;
     ui.draft = blankDraft();
-    go(wasEditing ? "browse" : "home");
+    go("browse");
   }
 
   // ---------------------------------------------------------------------
@@ -1495,7 +1602,7 @@
       },
       item("home", "Review", '<path d="M3 10.5L12 3l9 7.5V21H3z"/>'),
       item("browse", "Cards", '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18"/>'),
-      item("add", "Add", '<path d="M12 5v14M5 12h14"/>')
+      item("community", "Community", '<circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9.5" r="2.4"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6M16 13.2c2.2.2 3.8 1.7 4.3 4.1"/>')
     );
   }
 
@@ -1806,37 +1913,20 @@
         "div",
         { style: { display: "flex", alignItems: "center", gap: "10px", padding: "8px 20px 0" } },
         h("div", { class: "tap", style: { width: "34px", height: "34px", borderRadius: "10px", background: "#faf9f5", border: "1px solid #f0eee6", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: () => go("home") }, icon('<path d="M19 12H5M12 19l-7-7 7-7"/>', 16, "#141413")),
-        h("div", { style: { fontSize: "13px", color: "#5e5d59" } }, ui.tagsEditMode ? "Manage tags" : "Step 1 of 2"),
-        h("div", { style: { flex: "1" } }),
-        h("div", { class: "tap", style: { fontSize: "13px", color: "#c96442" }, onclick: () => { ui.tagsEditMode = !ui.tagsEditMode; render(); } }, ui.tagsEditMode ? "Done" : "Edit tags")
+        h("div", { style: { fontSize: "13px", color: "#5e5d59" } }, "Step 1 of 2")
       ),
 
       h(
         "div",
         { style: { padding: "18px 20px 0" } },
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", lineHeight: "1.15", color: "#141413" } }, ui.tagsEditMode ? "Manage your tags." : "Which tags today?"),
-        h(
-          "div",
-          { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } },
-          ui.tagsEditMode ? 'Tap × to delete a tag from every card. Cards left with none are marked "' + UNTAGGED_TAG + '".' : "Pick one or several. Only cards that are due in those tags enter the session."
-        )
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", lineHeight: "1.15", color: "#141413" } }, "Which tags today?"),
+        h("div", { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } }, "Pick one or several. Only cards that are due in those tags enter the session.")
       ),
 
       h(
         "div",
         { style: { margin: "20px 20px 0", display: "flex", flexWrap: "wrap", gap: "9px" } },
         ...tags.map((t) => {
-          if (ui.tagsEditMode) {
-            const deletable = t !== UNTAGGED_TAG;
-            return h(
-              "div",
-              { style: { display: "flex", alignItems: "center", gap: "9px", padding: "11px 12px 11px 15px", borderRadius: "9999px", background: "#faf9f5", border: "1px solid #f0eee6" } },
-              h("span", { style: { fontSize: "14px", color: "#141413" } }, t),
-              deletable
-                ? h("div", { class: "tap", style: { width: "20px", height: "20px", borderRadius: "9999px", background: "#f0eee6", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: () => deleteTag(t) }, icon('<path d="M18 6L6 18M6 6l12 12"/>', 11, "#c96442"))
-                : h("span", { style: { fontSize: "10.5px", color: "#b0aea5" } }, "default")
-            );
-          }
           const on = ui.sel.includes(t);
           return h(
             "div",
@@ -1847,7 +1937,7 @@
         })
       ),
 
-      ui.tagsEditMode ? null : h(
+      h(
         "div",
         { style: { margin: "24px 20px 0", padding: "16px 18px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px" } },
         h(
@@ -1861,7 +1951,7 @@
 
       h("div", { style: { flex: "1" } }),
 
-      ui.tagsEditMode ? null : h(
+      h(
         "div",
         { style: { position: "sticky", bottom: "0", padding: "14px 20px calc(env(safe-area-inset-bottom, 0px) + 22px)", background: "rgba(245,244,237,.94)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", borderTop: "1px solid #f0eee6" } },
         n
@@ -2031,11 +2121,18 @@
       return okQ && okFilter;
     }).sort((a, b) => b.createdAt - a.createdAt);
 
+    if (ui.selectMode) return screenBrowseSelect(list);
+
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
 
-      h("div", { style: { padding: "8px 20px 0", fontFamily: "var(--serif)", fontSize: "28px", color: "#141413" } }, "Cards"),
+      h(
+        "div",
+        { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", color: "#141413" } }, "Cards"),
+        h("div", { class: "tap", style: { width: "36px", height: "36px", borderRadius: "18px", background: "#141413", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: () => go("add") }, icon('<path d="M12 5v14M5 12h14"/>', 18, "#faf9f5"))
+      ),
 
       h(
         "div",
@@ -2049,11 +2146,28 @@
         { class: "scrollx", "data-remember-scroll": "browse-filters", style: { margin: "14px 0 0", padding: "0 20px" } },
         ...["All", RECENT_TAG].concat(tags).map((f) => {
           const on = ui.filter === f;
-          return h("div", { class: "tap chip", style: Object.assign({ padding: "8px 14px", borderRadius: "9999px", fontSize: "12.5px", whiteSpace: "nowrap" }, chipStyle(on)), onclick: () => { ui.filter = f; render(); } }, f);
+          const chip = h("div", { class: "tap chip", style: Object.assign({ padding: "8px 14px", borderRadius: "9999px", fontSize: "12.5px", whiteSpace: "nowrap" }, chipStyle(on)), onclick: () => { ui.filter = f; render(); } }, f);
+          const deletable = on && f !== "All" && f !== RECENT_TAG && f !== UNTAGGED_TAG;
+          if (!deletable) return chip;
+          return h(
+            "div",
+            { style: { position: "relative", flexShrink: "0" } },
+            chip,
+            h(
+              "div",
+              { class: "tap", style: { position: "absolute", right: "-4px", top: "-4px", width: "16px", height: "16px", borderRadius: "8px", background: "#f5f4ed", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: (e) => { e.stopPropagation(); openDeleteTagSheet(f); } },
+              icon('<path d="M6 6l12 12M18 6 6 18"/>', 8, "#5e5d59", { "stroke-width": "3.4" })
+            )
+          );
         })
       ),
 
-      h("div", { style: { margin: "16px 20px 0", fontSize: "11.5px", color: "#b0aea5" } }, list.length + " of " + data.cards.length + " cards"),
+      h(
+        "div",
+        { style: { margin: "16px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between" } },
+        h("span", { style: { fontSize: "11.5px", color: "#b0aea5" } }, list.length + " of " + data.cards.length + " cards"),
+        list.length ? h("div", { class: "tap", style: { fontSize: "14px", fontWeight: "500", color: "#c96442" }, onclick: enterSelectMode }, "Select") : null
+      ),
 
       h(
         "div",
@@ -2090,7 +2204,195 @@
       ),
       h("div", { style: { height: "24px" } }),
 
-      bottomNav("browse")
+      bottomNav("browse"),
+
+      ui.deleteTagSheet ? deleteTagSheetNode() : null
+    );
+  }
+
+  function screenBrowseSelect(list) {
+    const ids = list.map((c) => c.id);
+    const allSelected = ids.length > 0 && ids.every((id) => ui.selectedIds.includes(id));
+    const n = ui.selectedIds.length;
+
+    return h(
+      "div",
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
+
+      h(
+        "div",
+        { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
+        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15.5px", color: "#5e5d59" }, onclick: exitSelectMode }, icon('<path d="M15 18l-6-6 6-6"/>', 15, "#5e5d59"), "Cards"),
+        h("div", { class: "tap", style: { fontSize: "15px", color: "#5e5d59" }, onclick: exitSelectMode }, "Cancel")
+      ),
+
+      h(
+        "div",
+        { style: { padding: "16px 20px 0", display: "flex", flexDirection: "column", gap: "5px" } },
+        h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Select cards"),
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", fontWeight: "500", color: "#141413" } }, ui.filter === "All" ? "All cards" : ui.filter)
+      ),
+
+      h(
+        "div",
+        { style: { margin: "14px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between" } },
+        h(
+          "div",
+          { class: "tap chip", style: Object.assign({ display: "flex", alignItems: "center", gap: "7px", height: "32px", padding: "0 14px", borderRadius: "9999px", fontSize: "13.5px", fontWeight: "500" }, chipStyle(allSelected)), onclick: () => toggleSelectAll(ids) },
+          allSelected ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 13, "#faf9f5", { "stroke-width": "2.6" }) : null,
+          "All " + ids.length + " cards"
+        ),
+        h("span", { style: { fontSize: "12px", color: "#87867f" } }, n + " of " + ids.length + " selected")
+      ),
+
+      h(
+        "div",
+        { style: { flex: "1", overflow: "auto", margin: "14px 20px 0", display: "flex", flexDirection: "column", gap: "8px" } },
+        ...list.map((c) => {
+          const checked = ui.selectedIds.includes(c.id);
+          return h(
+            "div",
+            { class: "tap", style: { display: "flex", alignItems: "center", gap: "13px", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "12px" }, onclick: () => toggleCardSelected(c.id) },
+            h(
+              "div",
+              { style: { width: "21px", height: "21px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: checked ? "#c96442" : "transparent", border: checked ? "none" : "1.6px solid #d1cfc5" } },
+              checked ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "#faf9f5", { "stroke-width": "3.4" }) : null
+            ),
+            h(
+              "div",
+              { style: { display: "flex", flexDirection: "column", gap: "5px", minWidth: "0" } },
+              h("span", { style: { fontFamily: "var(--jp)", fontSize: "16px", color: "#141413" } }, c.front),
+              h("span", { style: { fontSize: "13px", color: "#5e5d59" } }, c.back)
+            )
+          );
+        })
+      ),
+
+      h(
+        "div",
+        { style: { padding: "14px 20px calc(env(safe-area-inset-bottom, 0px) + 18px)", display: "flex", gap: "10px" } },
+        h("div", { class: n ? "tap" : "", style: { flex: "1", padding: "16px", borderRadius: "9999px", textAlign: "center", fontSize: "15.5px", fontWeight: "500", background: n ? "#141413" : "#f0eee6", color: n ? "#faf9f5" : "#b0aea5" }, onclick: n ? openBulkTagSheet : null }, "Add tag"),
+        h("div", { class: n ? "tap" : "", style: { width: "112px", flexShrink: "0", padding: "16px", borderRadius: "9999px", textAlign: "center", fontSize: "15.5px", fontWeight: "500", background: "#faf9f5", border: "1px solid #e8e6dc", color: n ? "#b53333" : "#e0b3b3" }, onclick: n ? bulkDeleteSelected : null }, "Delete")
+      ),
+
+      ui.bulkTagSheet ? bulkTagSheetNode() : null
+    );
+  }
+
+  function bulkTagSheetNode() {
+    const s = ui.bulkTagSheet;
+    const allTagsList = browsableTags().filter((t) => t !== UNTAGGED_TAG);
+    const q = s.query.trim().toLowerCase();
+    const filtered = q ? allTagsList.filter((t) => t.toLowerCase().includes(q)) : allTagsList;
+    const isNew = s.query.trim() && !allTagsList.some((t) => t.toLowerCase() === s.query.trim().toLowerCase()) && !s.checked.includes(s.query.trim());
+    const pendingNew = s.checked.filter((t) => !allTagsList.includes(t));
+
+    return h(
+      "div",
+      { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", flexDirection: "column", justifyContent: "flex-end", zIndex: "20" }, onclick: closeBulkTagSheet },
+      h(
+        "div",
+        { style: { background: "#faf9f5", borderRadius: "24px 24px 0 0", padding: "20px 20px 24px", display: "flex", flexDirection: "column", gap: "14px", maxHeight: "82%", overflow: "auto" }, onclick: (e) => e.stopPropagation() },
+        h(
+          "div",
+          { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+          h("span", { style: { fontFamily: "var(--serif)", fontSize: "19px", fontWeight: "500" } }, "Add tag to " + ui.selectedIds.length + " card" + (ui.selectedIds.length === 1 ? "" : "s")),
+          h("span", { class: "tap", style: { fontSize: "14px", color: "#5e5d59" }, onclick: closeBulkTagSheet }, "Cancel")
+        ),
+        h(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "9px", padding: "11px 14px", background: "#f5f4ed", border: "1px solid #e8e6dc", borderRadius: "12px" } },
+          icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.5-4.5"/>', 15, "#87867f"),
+          h("input", { value: s.query, placeholder: "Find or create a tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14.5px", color: "#141413" }, oninput: (e) => { s.query = e.target.value; render(); } })
+        ),
+        pendingNew.length
+          ? h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px" } }, ...pendingNew.map((t) => h("div", { class: "tap chip", style: Object.assign({ padding: "8px 13px", borderRadius: "9999px", fontSize: "13px", display: "flex", alignItems: "center", gap: "7px" }, chipStyle(true)), onclick: () => toggleBulkTagChecked(t) }, t, icon('<path d="M18 6L6 18M6 6l12 12"/>', 10, "#faf9f5"))))
+          : null,
+        filtered.length
+          ? h(
+              "div",
+              { style: { background: "#f5f4ed", borderRadius: "16px", overflow: "hidden" } },
+              ...filtered.map((t, i) => h(
+                "div",
+                {},
+                i ? h("div", { style: { height: "1px", background: "#f0eee6" } }) : null,
+                h(
+                  "div",
+                  { class: "tap", style: { padding: "14px 15px", display: "flex", alignItems: "center", justifyContent: "space-between" }, onclick: () => toggleBulkTagChecked(t) },
+                  h("span", { style: { fontSize: "15px" } }, t),
+                  h(
+                    "div",
+                    { style: { width: "19px", height: "19px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: s.checked.includes(t) ? "#c96442" : "transparent", border: s.checked.includes(t) ? "none" : "1.6px solid #d1cfc5" } },
+                    s.checked.includes(t) ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "#faf9f5", { "stroke-width": "3.4" }) : null
+                  )
+                )
+              ))
+            )
+          : null,
+        isNew
+          ? h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "9px", color: "#c96442", fontSize: "14.5px", fontWeight: "500" }, onclick: createBulkTag }, icon('<path d="M12 5v14M5 12h14"/>', 17, "#c96442"), "Create “" + s.query.trim() + "”")
+          : null,
+        h(
+          "div",
+          { class: s.checked.length ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: s.checked.length ? "#141413" : "#f0eee6", color: s.checked.length ? "#faf9f5" : "#b0aea5" }, onclick: s.checked.length ? applyBulkTag : null },
+          "Add to " + ui.selectedIds.length + " card" + (ui.selectedIds.length === 1 ? "" : "s")
+        )
+      )
+    );
+  }
+
+  function deleteTagSheetNode() {
+    const tag = ui.deleteTagSheet;
+    const count = data.cards.filter((c) => c.tags.includes(tag)).length;
+    return h(
+      "div",
+      { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "12px", zIndex: "20" }, onclick: closeDeleteTagSheet },
+      h(
+        "div",
+        { style: { background: "#faf9f5", borderRadius: "18px", overflow: "hidden", marginBottom: "10px" }, onclick: (e) => e.stopPropagation() },
+        h(
+          "div",
+          { style: { padding: "15px 18px 13px", display: "flex", flexDirection: "column", gap: "4px", textAlign: "center", background: "#f5f4ed" } },
+          h("span", { style: { fontSize: "12.5px", letterSpacing: ".4px", textTransform: "uppercase", color: "#87867f" } }, 'Delete "' + tag + '"'),
+          h("span", { style: { fontSize: "12.5px", lineHeight: "1.5", color: "#87867f" } }, count + " card" + (count === 1 ? "" : "s") + " carr" + (count === 1 ? "ies" : "y") + " this tag. Choose what to remove.")
+        ),
+        h("div", { style: { height: "1px", background: "#f0eee6" } }),
+        h(
+          "div",
+          { class: "tap", style: { padding: "15px 18px", display: "flex", flexDirection: "column", gap: "3px", alignItems: "center" }, onclick: () => deleteTagOnly(tag) },
+          h("span", { style: { fontSize: "17px", fontWeight: "500" } }, "Delete tag only"),
+          h("span", { style: { fontSize: "12px", color: "#87867f", textAlign: "center" } }, "Cards stay in their other tags, or untagged")
+        ),
+        h("div", { style: { height: "1px", background: "#f0eee6" } }),
+        h(
+          "div",
+          { class: "tap", style: { padding: "15px 18px", display: "flex", flexDirection: "column", gap: "3px", alignItems: "center" }, onclick: () => deleteTagAndCards(tag) },
+          h("span", { style: { fontSize: "17px", color: "#b53333" } }, "Delete tag and relevant cards"),
+          h("span", { style: { fontSize: "12px", color: "#87867f", textAlign: "center" } }, "Removes all " + count + " cards carrying this tag")
+        )
+      ),
+      h("div", { class: "tap", style: { background: "#faf9f5", borderRadius: "18px", padding: "17px 16px", textAlign: "center", fontSize: "17px", fontWeight: "500" }, onclick: closeDeleteTagSheet }, "Cancel")
+    );
+  }
+
+  // Placeholder for now — the actual browse/share/download flows are a
+  // separate, larger phase (needs new backend tables). This just gives the
+  // nav slot somewhere real to land instead of a dead tab.
+  function screenCommunity() {
+    return h(
+      "div",
+      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+
+      h("div", { style: { padding: "8px 20px 0", fontFamily: "var(--serif)", fontSize: "28px", color: "#141413" } }, "Community"),
+
+      h(
+        "div",
+        { style: { flex: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px", textAlign: "center", gap: "10px" } },
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "20px", color: "#141413" } }, "Coming soon."),
+        h("div", { style: { fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } }, "Share your tags with other learners, and download decks other people have made.")
+      ),
+
+      bottomNav("community")
     );
   }
 
@@ -2487,6 +2789,7 @@
       case "done": content = ui.session ? screenDone() : screenHome(); break;
       case "browse": content = screenBrowse(); break;
       case "add": content = screenAdd(); break;
+      case "community": content = screenCommunity(); break;
       case "profile": content = screenProfile(); break;
       case "changePassword": content = screenChangePassword(); break;
       case "membership": content = screenMembership(); break;

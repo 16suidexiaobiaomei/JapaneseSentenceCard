@@ -2727,7 +2727,7 @@
               ...chips.map((lang) =>
                 h(
                   "div",
-                  { class: "tap chip", style: Object.assign({ height: "30px", padding: "0 13px", borderRadius: "9999px", fontSize: "12.5px", fontWeight: "500", flexShrink: "0" }, chipStyle(ui.communityLangFilter === lang)), onclick: () => { ui.communityLangFilter = lang; render(); } },
+                  { class: "tap chip", style: Object.assign({ height: "30px", padding: "0 13px", borderRadius: "9999px", fontSize: "12.5px", fontWeight: "500", flexShrink: "0", whiteSpace: "nowrap" }, chipStyle(ui.communityLangFilter === lang)), onclick: () => { ui.communityLangFilter = lang; render(); } },
                   lang
                 )
               )
@@ -2908,6 +2908,7 @@
     if (shared && shared.status === "removed") { statusText = "Removed after being reported"; statusColor = "#b53333"; }
     else if (shared && shared.status === "active") { statusText += " · shared publicly"; }
     else if (shared && shared.status === "unpublished") { statusText += " · unpublished"; }
+    else if (count > 0 && eligible === 0) { statusText += " · downloaded from the community"; }
     else if (eligible < 50) { statusText += " · needs at least 50 to share"; }
 
     const canToggleShare = shared ? shared.status !== "removed" : eligible >= 50;
@@ -2964,8 +2965,43 @@
     );
   }
 
-  function screenMyTags() {
+  // Splits the user's tags into three groups so "share status" is
+  // scannable at a glance instead of buried in each row's status line:
+  // - shared: currently live in the community.
+  // - downloaded: every card under it came from the community (0
+  //   eligible cards), so it can never be shared — a fundamentally
+  //   different state from "unshared", not just "not shared yet".
+  // - unshared: everything else the user owns (paused/removed shares,
+  //   never shared, or a mix of downloaded + the user's own cards —
+  //   still shareable using just the eligible ones).
+  function myTagsCategorized() {
     const tags = browsableTags().filter((t) => t !== UNTAGGED_TAG);
+    const shared = [], unshared = [], downloaded = [];
+    tags.forEach((t) => {
+      const row = sharedRowForTag(t);
+      const eligible = eligibleCardsForTag(t).length;
+      const count = cardsMatchingTags([t]).length;
+      if (row && row.status === "active") shared.push(t);
+      else if (count > 0 && eligible === 0) downloaded.push(t);
+      else unshared.push(t);
+    });
+    return { shared, unshared, downloaded };
+  }
+
+  function myTagsSection(title, tags) {
+    return h(
+      "div",
+      { style: { display: "flex", flexDirection: "column", gap: "9px" } },
+      h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, title),
+      tags.length
+        ? settingsCard(...tags.map((t) => myTagRow(t)))
+        : h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "None yet.")
+    );
+  }
+
+  function screenMyTags() {
+    const { shared, unshared, downloaded } = myTagsCategorized();
+    const anyTags = shared.length + unshared.length + downloaded.length > 0;
 
     return h(
       "div",
@@ -2979,7 +3015,7 @@
 
       h(
         "div",
-        { style: { flex: "1", overflow: "auto", padding: "14px 20px 0", display: "flex", flexDirection: "column", gap: "20px" } },
+        { style: { flex: "1", overflow: "auto", padding: "14px 20px 18px", display: "flex", flexDirection: "column", gap: "20px" } },
 
         h("div", { style: { fontFamily: "var(--serif)", fontSize: "27px", fontWeight: "500", color: "#141413" } }, "My tags"),
 
@@ -2991,16 +3027,11 @@
             )
           : null,
 
-        h(
-          "div",
-          { style: { display: "flex", flexDirection: "column", gap: "9px" } },
-          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, "Existing tags"),
-          ui.myTagsLoading
-            ? h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "Loading…")
-            : tags.length
-              ? settingsCard(...tags.map((t) => myTagRow(t)))
-              : h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "No tags yet — add some cards first.")
-        )
+        ui.myTagsLoading
+          ? h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "Loading…")
+          : anyTags
+            ? [myTagsSection("Shared", shared), myTagsSection("Unshared", unshared), myTagsSection("Downloaded", downloaded)]
+            : h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "No tags yet — add some cards first.")
       ),
 
       ui.renameTagSheet ? renameTagSheetNode() : null

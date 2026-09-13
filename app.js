@@ -1034,13 +1034,14 @@
     return matches.reduce((a, b) => (new Date(b.created_at) > new Date(a.created_at) ? b : a));
   }
 
+  // Pausing is a one-tap toggle — resuming isn't (see openReshareFlow
+  // below): a paused tag's card selection may be stale, so bringing it
+  // back goes through the full share flow instead of a plain confirm.
   async function toggleUnshareTag(row) {
-    const goingLive = row.status === "unpublished";
-    if (goingLive && ui.myTagsFrozen) { alert("Sharing is paused on this account. Contact support@japanesesentencecards.com if you think this is a mistake."); return; }
-    if (!confirm(goingLive ? 'Share "' + row.name + '" with the community again?' : 'Stop sharing "' + row.name + '"? People who already added it keep their copy.')) return;
-    const { error } = await sb.from("shared_tags").update({ status: goingLive ? "active" : "unpublished" }).eq("id", row.id);
-    if (error) { alert(goingLive ? "Couldn't re-share this tag — sharing may be paused on this account." : "Couldn't update sharing: " + error.message); return; }
-    row.status = goingLive ? "active" : "unpublished";
+    if (!confirm('Stop sharing "' + row.name + '"? People who already added it keep their copy.')) return;
+    const { error } = await sb.from("shared_tags").update({ status: "unpublished" }).eq("id", row.id);
+    if (error) { alert("Couldn't update sharing: " + error.message); return; }
+    row.status = "unpublished";
     render();
   }
 
@@ -1083,6 +1084,27 @@
       description: "",
       busy: false,
       error: "",
+      republishId: null,
+    };
+    go("shareTag");
+  }
+
+  // Resuming a paused tag: re-run the full share flow (fresh card
+  // selection, editable description/language) pre-filled from what it
+  // was shared with before, rather than reviving the old snapshot
+  // untouched. republishId tells submitShareTag() to update this row
+  // in place instead of creating a new shared_tags row.
+  function openReshareFlow(tagName, row) {
+    if (ui.myTagsFrozen) { alert("Sharing is paused on this account. Contact support@japanesesentencecards.com if you think this is a mistake."); return; }
+    const eligible = eligibleCardsForTag(tagName);
+    ui.shareDraft = {
+      tagName,
+      selectedIds: eligible.map((c) => c.id),
+      backLanguage: row.back_language || "English",
+      description: row.description || "",
+      busy: false,
+      error: "",
+      republishId: row.id,
     };
     go("shareTag");
   }
@@ -1112,16 +1134,25 @@
     // identical to "not yours" from the RPC's point of view.
     const selectedCards = data.cards.filter((c) => d.selectedIds.includes(c.id));
     await pushCardsBulk(selectedCards);
-    const { data: newId, error } = await sb.rpc("share_tag", {
-      p_name: d.tagName,
-      p_description: d.description.trim(),
-      p_back_language: d.backLanguage,
-      p_card_ids: d.selectedIds,
-    });
+    const { error } = d.republishId
+      ? await sb.rpc("republish_shared_tag", {
+          p_shared_tag_id: d.republishId,
+          p_name: d.tagName,
+          p_description: d.description.trim(),
+          p_back_language: d.backLanguage,
+          p_card_ids: d.selectedIds,
+        })
+      : await sb.rpc("share_tag", {
+          p_name: d.tagName,
+          p_description: d.description.trim(),
+          p_back_language: d.backLanguage,
+          p_card_ids: d.selectedIds,
+        });
     d.busy = false;
     if (error) { d.error = error.message; render(); return; }
+    const wasRepublish = !!d.republishId;
     ui.shareDraft = null;
-    alert('"' + d.tagName + '" is now shared with the community.');
+    alert('"' + d.tagName + '" is ' + (wasRepublish ? "shared with the community again." : "now shared with the community."));
     openMyTags();
   }
 
@@ -2581,7 +2612,7 @@
         { style: { display: "flex", gap: "15px", alignItems: "center", flexShrink: "0" } },
         h(
           "div",
-          { class: canToggleShare ? "tap" : "", onclick: canToggleShare ? (shared ? () => toggleUnshareTag(shared) : () => openShareFlow(t)) : null },
+          { class: canToggleShare ? "tap" : "", onclick: canToggleShare ? (shared ? (isLive ? () => toggleUnshareTag(shared) : () => openReshareFlow(t, shared)) : () => openShareFlow(t)) : null },
           icon('<path d="M12 16V4m0 0 4 4m-4-4-4 4M4 18v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1"/>', 17, isLive ? "#5e5d59" : canToggleShare ? "#c96442" : "#d1cfc5")
         ),
         h(
@@ -2685,7 +2716,7 @@
         h(
           "div",
           { style: { padding: "14px 0 0", display: "flex", flexDirection: "column", gap: "5px" } },
-          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, "Share tag"),
+          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, d.republishId ? "Re-share tag" : "Share tag"),
           h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", fontWeight: "500", color: "#141413" } }, d.tagName)
         ),
 
@@ -2766,7 +2797,7 @@
           h(
             "div",
             { class: n >= 50 && !d.busy ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: n >= 50 && !d.busy ? "#141413" : "#f0eee6", color: n >= 50 && !d.busy ? "#faf9f5" : "#b0aea5" }, onclick: n >= 50 && !d.busy ? submitShareTag : null },
-            d.busy ? "Sharing…" : "Share " + n + " cards"
+            d.busy ? (d.republishId ? "Re-sharing…" : "Sharing…") : (d.republishId ? "Re-share " : "Share ") + n + " cards"
           ),
           h("span", { style: { fontSize: "11.5px", color: "#b0aea5", textAlign: "center" } }, "At least 50 cards are needed to share a tag.")
         )

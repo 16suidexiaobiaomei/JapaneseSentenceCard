@@ -1093,10 +1093,12 @@
   }
 
   async function openTagDetail(row) {
+    // Every card, not just a preview slice — a partial list isn't
+    // enough to judge whether a tag is actually worth downloading.
     ui.tagDetail = { row, previewCards: [], loading: true, reportOpen: false, reportReason: null, reportDetail: "", reportBusy: false, reportError: "", reportSubmitted: false };
     go("tagDetail");
     try {
-      const { data: cards } = await sb.from("shared_tag_cards").select("front, back").eq("shared_tag_id", row.id).order("sort_order").limit(10);
+      const { data: cards } = await sb.from("shared_tag_cards").select("front, back").eq("shared_tag_id", row.id).order("sort_order");
       if (ui.tagDetail && ui.tagDetail.row.id === row.id) ui.tagDetail.previewCards = cards || [];
     } catch (e) {
       console.warn("loading tag detail failed (offline?)", e);
@@ -2868,7 +2870,7 @@
         h(
           "div",
           { style: { display: "flex", flexDirection: "column", gap: "9px" } },
-          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, "Preview"),
+          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, "Cards in this tag"),
           t.loading
             ? h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "Loading…")
             : h(
@@ -2886,10 +2888,7 @@
                       h("span", { style: { fontSize: "12px", color: "#87867f" } }, c.back)
                     )
                   )
-                ),
-                row.card_count > t.previewCards.length
-                  ? h("div", { style: { padding: "12px 15px", textAlign: "center", fontSize: "13px", color: "#87867f" } }, row.card_count - t.previewCards.length + " more in the full tag")
-                  : null
+                )
               )
         )
       ),

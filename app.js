@@ -152,6 +152,7 @@
         updatedAt: now - (SEED_CARDS.length - i) * 1000,
       })),
       reviewLog: {}, // "YYYY-MM-DD" -> count
+      activeMsLog: {}, // "YYYY-MM-DD" -> ms active that day, for the 7d/30d "Time in app" tile
       profile: { username: "", photo: null },
       totalActiveMs: 0,
     };
@@ -164,6 +165,7 @@
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.cards)) return makeSeedData();
       if (!parsed.reviewLog) parsed.reviewLog = {};
+      if (!parsed.activeMsLog) parsed.activeMsLog = {};
       if (!parsed.profile) parsed.profile = { username: "", photo: null };
       if (parsed.profile.name !== undefined && !parsed.profile.username) {
         parsed.profile.username = parsed.profile.name;
@@ -208,6 +210,8 @@
       lastTick = now;
       if (document.visibilityState === "visible" && delta > 0 && delta < 60000 && ui.screen !== "boot" && ui.screen !== "auth") {
         data.totalActiveMs += delta;
+        const key = dateKey(new Date());
+        data.activeMsLog[key] = (data.activeMsLog[key] || 0) + delta;
         saveData();
       }
     }, 15000);
@@ -355,6 +359,26 @@
       if (d >= from && d <= to) n++;
     }
     return n;
+  }
+
+  function cardsAddedInLastDays(daysBack) {
+    if (daysBack === Infinity) return data.cards.length;
+    const from = rangeStart(daysBack).getTime();
+    return data.cards.filter((c) => c.createdAt >= from).length;
+  }
+
+  // "All" reports the true lifetime total rather than summing
+  // activeMsLog, since that log only exists from whenever this
+  // per-day tracking shipped — summing it for "all" would silently
+  // under-report time accumulated before that.
+  function activeMsInLastDays(daysBack) {
+    if (daysBack === Infinity) return data.totalActiveMs;
+    const from = rangeStart(daysBack);
+    let sum = 0;
+    for (const [key, ms] of Object.entries(data.activeMsLog)) {
+      if (new Date(key + "T00:00:00") >= from) sum += ms;
+    }
+    return sum;
   }
 
   function formatDuration(ms) {
@@ -550,7 +574,7 @@
     const session = await getSessionSafe();
     if (!session) return;
     try {
-      await sb.from("review_log").upsert({ user_id: session.user.id, day, count: data.reviewLog[day] || 0 });
+      await sb.from("review_log").upsert({ user_id: session.user.id, day, count: data.reviewLog[day] || 0, active_ms: data.activeMsLog[day] || 0 });
     } catch (e) {
       console.warn("pushReviewDay failed (offline?)", e);
     }
@@ -595,18 +619,22 @@
       }
 
       const remoteCounts = {};
-      (remoteLog || []).forEach((r) => { remoteCounts[r.day] = r.count; });
+      const remoteActiveMs = {};
+      (remoteLog || []).forEach((r) => { remoteCounts[r.day] = r.count; remoteActiveMs[r.day] = r.active_ms || 0; });
       const mergedLog = Object.assign({}, data.reviewLog);
       (remoteLog || []).forEach((r) => { mergedLog[r.day] = Math.max(mergedLog[r.day] || 0, r.count); });
       data.reviewLog = mergedLog;
+      const mergedActiveMsLog = Object.assign({}, data.activeMsLog);
+      (remoteLog || []).forEach((r) => { mergedActiveMsLog[r.day] = Math.max(mergedActiveMsLog[r.day] || 0, r.active_ms || 0); });
+      data.activeMsLog = mergedActiveMsLog;
 
-      // A day whose local count is still higher than what the server has
-      // means an earlier pushReviewDay() never made it through (offline at
-      // the time, tab closed mid-request, etc.) — retry it here so a streak
-      // recorded on one device isn't silently missing on another. Unlike
-      // cards, review-log pushes had no retry path before this.
-      for (const day of Object.keys(mergedLog)) {
-        if (mergedLog[day] > (remoteCounts[day] || 0)) await pushReviewDay(day);
+      // A day whose local count or active time is still higher than what
+      // the server has means an earlier pushReviewDay() never made it
+      // through (offline at the time, tab closed mid-request, etc.) —
+      // retry it here so a streak — or the "time in app" tile — recorded
+      // on one device isn't silently missing on another.
+      for (const day of new Set([...Object.keys(mergedLog), ...Object.keys(mergedActiveMsLog)])) {
+        if (mergedLog[day] > (remoteCounts[day] || 0) || (mergedActiveMsLog[day] || 0) > (remoteActiveMs[day] || 0)) await pushReviewDay(day);
       }
 
       // Rows this device is itself mid-deleting shouldn't count toward
@@ -2133,12 +2161,12 @@
         h(
           "div",
           { style: { marginTop: "14px", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" } },
-          statTile("Cards", String(data.cards.length)),
+          statTile("Cards", String(cardsAddedInLastDays(rangeDays))),
           statTile("Reviewed", String(cardsReviewedInLastDays(rangeDays))),
           statTile("Active days", String(activeDaysInLastDays(rangeDays))),
           statTile("Current streak", streakDays() + "d"),
           statTile("Longest streak", longestStreak() + "d"),
-          statTile("Time in app", formatDuration(data.totalActiveMs))
+          statTile("Time in app", formatDuration(activeMsInLastDays(rangeDays)))
         ),
 
         h("div", { style: { marginTop: "14px", fontSize: "12px", color: "#5e5d59" } }, heatmapTipText(ui.heatmapTip)),

@@ -1510,6 +1510,13 @@
     }
   }
 
+  // No in-app browser plugin is installed — a plain external https link
+  // is enough, since Capacitor's WKWebView already opens links outside
+  // the app's own origin in the system browser by default.
+  function openSupportPage() {
+    window.open("https://japanesesentencecards.com/support.html", "_blank");
+  }
+
   function cancelProfile() {
     go("home");
   }
@@ -3587,6 +3594,7 @@
             () => go("membership")
           ),
           settingsRow("Change password", chevronNode(), () => go("changePassword")),
+          settingsRow("Q&A", chevronNode(), openSupportPage),
           settingsRow(
             "Contact us",
             [

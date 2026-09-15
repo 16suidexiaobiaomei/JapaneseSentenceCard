@@ -832,14 +832,15 @@
     return data.cards.find((c) => c.id === id) || null;
   }
 
-  // Self-graded recall, FSRS-scheduled: the user judges "did I remember
-  // this?" BEFORE the back note is revealed (so the judgment reflects real
-  // recall, not a post-hoc read of the answer). That choice both reveals
-  // the back and drives the FSRS memory-state update for this card.
+  // Self-graded recall, FSRS-scheduled: the user can flip the card to
+  // either side as many times as they like before judging themselves —
+  // grading isn't tied to which face is showing. Choosing a grade
+  // drives the FSRS memory-state update and immediately advances to
+  // the next card in one action.
   function answerCard(remembered) {
     const s = ui.session;
     const c = currentCard();
-    if (!s || !c || s.flipped) return;
+    if (!s || !c) return;
 
     const rating = remembered ? 3 : 1; // FSRS rating scale: 1=Again, 3=Good
     const now = Date.now();
@@ -868,13 +869,19 @@
     }
 
     s.results[remembered ? "good" : "again"] += 1;
-    s.flipped = true;
     c.updatedAt = now;
     logReviewToday();
     saveData();
-    render();
     pushCard(c);
     pushReviewDay(dateKey(new Date()));
+    nextCard();
+  }
+
+  function flipCard() {
+    const s = ui.session;
+    if (!s) return;
+    s.flipped = !s.flipped;
+    render();
   }
 
   function nextCard() {
@@ -2288,73 +2295,46 @@
     );
   }
 
-  // Human-readable label for the gap between two timestamps (used to show
-  // the FSRS-computed next-review schedule right after the user answers).
-  function formatGap(ms) {
-    if (ms <= 60 * 1000) return "a minute";
-    if (ms < 60 * 60 * 1000) return Math.round(ms / 60000) + " minutes";
-    const days = Math.round(ms / 86400000);
-    if (days <= 0) return "less than a day";
-    if (days === 1) return "1 day";
-    if (days < 30) return days + " days";
-    if (days < 365) return Math.round(days / 30) + " months";
-    return (days / 365).toFixed(1) + " years";
-  }
 
   function screenReview() {
     const s = ui.session;
     const c = currentCard();
-    const progressPct = Math.round(((s.qi + (s.flipped ? 0.5 : 0)) / Math.max(1, s.queue.length)) * 100);
+    // Real progress only advances on an actual grade now that flipping
+    // is free-form (toggling it back and forth shouldn't move the bar).
+    const progressPct = Math.round((s.qi / Math.max(1, s.queue.length)) * 100);
 
-    const flipZone = h(
+    const audioRow = h(
       "div",
-      { style: { marginTop: "18px", flex: "1", background: "#faf9f5", borderRadius: "28px", padding: "34px 26px", display: "flex", flexDirection: "column", boxShadow: "0 4px 24px rgba(0,0,0,.28)" } }
+      { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
+      h(
+        "div",
+        { class: "tap", style: { display: "flex", alignItems: "center", gap: "11px", padding: "10px 16px 10px 12px", borderRadius: "9999px", background: "#f5f4ed", border: "1px solid #f0eee6" }, onclick: (e) => { e.stopPropagation(); playCardAudio(c); } },
+        icon('<path d="M8 5l11 7-11 7z"/>', 16, "#c96442"),
+        h("span", { style: { fontSize: "11.5px", color: "#5e5d59" } }, c.audio && c.audio.type === "voice" ? "your voice" : "play audio")
+      ),
+      h("div", { style: { fontSize: "12px", color: "#b0aea5" } }, "Tap to flip")
     );
 
-    if (!s.flipped) {
-      flipZone.appendChild(
-        h(
-          "div",
-          { class: "anim-in", style: { flex: "1", display: "flex", flexDirection: "column", justifyContent: "center" } },
-          h("div", { style: { fontFamily: "var(--jp)", fontSize: "29px", lineHeight: "1.5", color: "#141413" } }, c.front),
-          h("div", { style: { marginTop: "14px", fontSize: "13.5px", color: "#5e5d59", letterSpacing: ".2px" } }, c.romaji || "")
-        )
-      );
-      flipZone.appendChild(
-        h(
-          "div",
-          { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
-          h(
+    // The card itself is the flip control — tap either face to see the
+    // other, as many times as you like, before grading.
+    const flipZone = h(
+      "div",
+      { class: "tap", style: { marginTop: "18px", flex: "1", background: "#faf9f5", borderRadius: "28px", padding: "34px 26px", display: "flex", flexDirection: "column", boxShadow: "0 4px 24px rgba(0,0,0,.28)" }, onclick: flipCard },
+      !s.flipped
+        ? h(
             "div",
-            { class: "tap", style: { display: "flex", alignItems: "center", gap: "11px", padding: "10px 16px 10px 12px", borderRadius: "9999px", background: "#f5f4ed", border: "1px solid #f0eee6" }, onclick: () => playCardAudio(c) },
-            icon('<path d="M8 5l11 7-11 7z"/>', 16, "#c96442"),
-            h("span", { style: { fontSize: "11.5px", color: "#5e5d59" } }, c.audio && c.audio.type === "voice" ? "your voice" : "play audio")
-          ),
-          h("div", { style: { fontSize: "12px", color: "#b0aea5" } }, "Recall it, then judge yourself")
-        )
-      );
-    } else {
-      const gap = formatGap(c.dueAt - c.lastReviewAt);
-      flipZone.appendChild(
-        h(
-          "div",
-          { class: "anim-in", style: { display: "flex", flexDirection: "column", height: "100%" } },
-          h("div", { style: { fontFamily: "var(--jp)", fontSize: "16px", lineHeight: "1.5", color: "#5e5d59", paddingBottom: "18px", borderBottom: "1px solid #f0eee6" } }, c.front),
-          h("div", { style: { flex: "1", display: "flex", alignItems: "center" } }, h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", lineHeight: "1.35", color: "#141413" } }, c.back)),
-          h(
-            "div",
-            { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
-            h(
-              "div",
-              { class: "tap", style: { display: "flex", alignItems: "center", gap: "11px", padding: "10px 16px 10px 12px", borderRadius: "9999px", background: "#f5f4ed", border: "1px solid #f0eee6" }, onclick: () => playCardAudio(c) },
-              icon('<path d="M8 5l11 7-11 7z"/>', 16, "#c96442"),
-              h("span", { style: { fontSize: "11.5px", color: "#5e5d59" } }, c.audio && c.audio.type === "voice" ? "your voice" : "play audio")
-            ),
-            h("div", { style: { fontSize: "11.5px", color: "#b0aea5" } }, "Reviewed " + c.reps + " · next in " + gap)
+            { class: "anim-in", style: { flex: "1", display: "flex", flexDirection: "column", justifyContent: "center" } },
+            h("div", { style: { fontFamily: "var(--jp)", fontSize: "29px", lineHeight: "1.5", color: "#141413" } }, c.front),
+            h("div", { style: { marginTop: "14px", fontSize: "13.5px", color: "#5e5d59", letterSpacing: ".2px" } }, c.romaji || "")
           )
-        )
-      );
-    }
+        : h(
+            "div",
+            { class: "anim-in", style: { display: "flex", flexDirection: "column", flex: "1" } },
+            h("div", { style: { fontFamily: "var(--jp)", fontSize: "16px", lineHeight: "1.5", color: "#5e5d59", paddingBottom: "18px", borderBottom: "1px solid #f0eee6" } }, c.front),
+            h("div", { style: { flex: "1", display: "flex", alignItems: "center" } }, h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", lineHeight: "1.35", color: "#141413" } }, c.back))
+          ),
+      audioRow
+    );
 
     return h(
       "div",
@@ -2377,22 +2357,20 @@
 
       flipZone,
 
-      s.flipped
-        ? h("div", { class: "tap", style: { marginTop: "16px", padding: "16px", borderRadius: "14px", textAlign: "center", background: "#c96442", color: "#faf9f5", fontSize: "15px", fontWeight: "500" }, onclick: nextCard }, "Next card")
-        : h(
-            "div",
-            { style: { marginTop: "16px", display: "flex", gap: "9px" } },
-            h(
-              "div",
-              { class: "tap", style: { flex: "1", padding: "16px 8px", borderRadius: "14px", textAlign: "center", background: "rgba(250,249,245,.06)", border: "1px solid rgba(250,249,245,.16)" }, onclick: () => answerCard(false) },
-              h("div", { style: { fontSize: "14.5px", fontWeight: "500", color: "#faf9f5" } }, "Didn't remember")
-            ),
-            h(
-              "div",
-              { class: "tap", style: { flex: "1", padding: "16px 8px", borderRadius: "14px", textAlign: "center", background: "#c96442", border: "1px solid #c96442" }, onclick: () => answerCard(true) },
-              h("div", { style: { fontSize: "14.5px", fontWeight: "500", color: "#faf9f5" } }, "Remembered")
-            )
-          )
+      h(
+        "div",
+        { style: { marginTop: "16px", display: "flex", gap: "9px" } },
+        h(
+          "div",
+          { class: "tap", style: { flex: "1", padding: "16px 8px", borderRadius: "14px", textAlign: "center", background: "rgba(250,249,245,.06)", border: "1px solid rgba(250,249,245,.16)" }, onclick: () => answerCard(false) },
+          h("div", { style: { fontSize: "14.5px", fontWeight: "500", color: "#faf9f5" } }, "Didn't remember")
+        ),
+        h(
+          "div",
+          { class: "tap", style: { flex: "1", padding: "16px 8px", borderRadius: "14px", textAlign: "center", background: "#c96442", border: "1px solid #c96442" }, onclick: () => answerCard(true) },
+          h("div", { style: { fontSize: "14.5px", fontWeight: "500", color: "#faf9f5" } }, "Remembered")
+        )
+      )
     );
   }
 

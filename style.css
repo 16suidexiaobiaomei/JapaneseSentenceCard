@@ -16,6 +16,66 @@
   --serif: 'Source Serif 4', Georgia, serif;
   --jp: 'Noto Serif JP', serif;
   --sans: Geist, system-ui, sans-serif;
+
+  /* ---------------------------------------------------------------
+     Theme tokens (light values here; dark overrides below). Every
+     inline color in app.js should reference one of these instead of
+     a literal hex value — that's what actually makes dark mode work,
+     since app.js sets styles as plain JS objects, not CSS classes.
+     A few groups deliberately do NOT change with theme:
+       - --accent/--accent-2/--text-on-accent: the brand color has
+         enough contrast on both light and dark surfaces already.
+       - --spotlight-*: the "Due now" / "Most downloaded" hero panels
+         and the Review/Done screens are a deliberate always-dark
+         focus-mode look, independent of the page theme (same as
+         today, before this feature existed).
+       - --danger/--success: already have enough contrast either way.
+     --surface-invert-bg/text is for solid "black pill" buttons and
+     selected-chip states — those invert together (dark-on-light
+     becomes light-on-dark) rather than just going transparent.
+     --------------------------------------------------------------- */
+  --bg-page: #f5f4ed;
+  --bg-surface: #faf9f5;
+  --bg-tint: #f0eee6;
+  --text-primary: #141413;
+  --text-secondary: #5e5d59;
+  --text-muted: #87867f;
+  --text-faint: #b0aea5;
+  --text-faintest: #d1cfc5;
+  --border-1: #f0eee6;
+  --border-2b: #e8e6dc;
+  --border-3: #e6e3d8;
+  --surface-invert-bg: #141413;
+  --surface-invert-text: #faf9f5;
+  --text-on-accent: #faf9f5;
+  --danger: #b53333;
+  --danger-bg: #faf3f0;
+  --danger-border: #f0e2dc;
+  --danger-text: #8a4a35;
+  --success: #3a9d5d;
+  --spotlight-bg: #141413;
+  --spotlight-bg-2: #1a1a18;
+  --spotlight-text: #faf9f5;
+  --spotlight-text-muted: #b0aea5;
+}
+
+:root[data-theme="dark"] {
+  --bg-page: #1c1b18;
+  --bg-surface: #26241f;
+  --bg-tint: #2d2a25;
+  --text-primary: #f5f4ed;
+  --text-secondary: #b6b1a5;
+  --text-muted: #918c7f;
+  --text-faint: #6c6659;
+  --text-faintest: #514c42;
+  --border-1: #332f29;
+  --border-2b: #3b3730;
+  --border-3: #454038;
+  --surface-invert-bg: #f5f4ed;
+  --surface-invert-text: #141413;
+  --danger-bg: #2b1714;
+  --danger-border: #3e211b;
+  --danger-text: #e0a89a;
 }
 
 * { box-sizing: border-box; }
@@ -40,7 +100,7 @@ button { border: none; background: none; padding: 0; font: inherit; cursor: poin
 
 textarea:focus, input:focus { outline: none; border-color: var(--focus) !important; }
 
-::placeholder { color: var(--muted-2); }
+::placeholder { color: var(--text-faint); }
 
 #app {
   height: 100dvh;
@@ -60,7 +120,7 @@ textarea:focus, input:focus { outline: none; border-color: var(--focus) !importa
   width: 100%;
   max-width: 480px;
   height: 100dvh;
-  background: var(--home-bg);
+  background: var(--bg-page);
   display: flex;
   flex-direction: column;
   position: relative;

@@ -21,7 +21,7 @@
     // anything — but a visible message beats a permanently blank screen
     // with no console to explain it.
     document.getElementById("app").innerHTML =
-      '<div style="padding:60px 24px;text-align:center;font-family:sans-serif;color:#5e5d59">Couldn\'t load a required script. Check your connection and reopen the app.</div>';
+      '<div style="padding:60px 24px;text-align:center;font-family:sans-serif;color:var(--text-secondary)">Couldn\'t load a required script. Check your connection and reopen the app.</div>';
     return;
   }
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -159,6 +159,7 @@
       activeMsLog: {}, // "YYYY-MM-DD" -> ms active that day, for the 7d/30d "Time in app" tile
       profile: { username: "", photo: null },
       totalActiveMs: 0,
+      theme: "system", // "light" | "dark" | "system" — device-local, not synced (see applyTheme())
     };
   }
 
@@ -176,6 +177,7 @@
       }
       delete parsed.profile.name;
       if (typeof parsed.totalActiveMs !== "number") parsed.totalActiveMs = 0;
+      if (parsed.theme !== "light" && parsed.theme !== "dark" && parsed.theme !== "system") parsed.theme = "system";
       if (typeof parsed.userId !== "string") parsed.userId = null;
       if (!Array.isArray(parsed.pendingDeletes)) parsed.pendingDeletes = [];
       parsed.cards.forEach((c) => {
@@ -202,6 +204,29 @@
     } catch (e) {
       console.warn("Could not save to localStorage", e);
     }
+  }
+
+  // Sets the actual light/dark attribute the CSS theme tokens key off
+  // (see style.css) — "system" resolves against the OS setting rather
+  // than being a third real appearance. Device-local only, deliberately
+  // not synced: appearance is a per-screen preference, not account data.
+  function applyTheme() {
+    const effective = data.theme === "dark" || (data.theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", effective);
+  }
+
+  function setTheme(theme) {
+    data.theme = theme;
+    saveData();
+    applyTheme();
+    render();
+  }
+
+  applyTheme();
+  if (window.matchMedia) {
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+      if (data.theme === "system") applyTheme();
+    });
   }
 
   // Tracks cumulative time the app has been open and visible, for the
@@ -434,7 +459,7 @@
     return 4;
   }
 
-  const HEAT_COLORS = ["#f0eee6", "#f1d7bc", "#e6a874", "#c96442", "#7a3018"];
+  const HEAT_COLORS = ["var(--bg-tint)", "#f1d7bc", "#e6a874", "var(--accent)", "#7a3018"];
 
   function heatmapTipText(tip) {
     if (!tip) return "Hover or tap a day to see reviews";
@@ -1662,6 +1687,7 @@
       data.userId = userId;
       data.cards = []; // avoid flashing the example deck if this turns out to be a returning user
     }
+    applyTheme();
     ui.screen = "home";
     render();
     await syncNow();
@@ -1892,12 +1918,12 @@
       { style: { position: "fixed", inset: "0", background: "rgba(20,20,19,.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: "50", padding: "24px" } },
       h(
         "div",
-        { style: { background: "#f5f4ed", borderRadius: "20px", padding: "22px", width: "100%", maxWidth: "340px" } },
-        h("div", { style: { fontSize: "15px", fontWeight: "500", color: "#141413", textAlign: "center", marginBottom: "16px" } }, "Adjust photo"),
+        { style: { background: "var(--bg-page)", borderRadius: "20px", padding: "22px", width: "100%", maxWidth: "340px" } },
+        h("div", { style: { fontSize: "15px", fontWeight: "500", color: "var(--text-primary)", textAlign: "center", marginBottom: "16px" } }, "Adjust photo"),
         h(
           "div",
           {
-            style: { width: CROP_FRAME + "px", height: CROP_FRAME + "px", margin: "0 auto", borderRadius: "9999px", overflow: "hidden", position: "relative", background: "#e5e2d6", touchAction: "none", cursor: "grab" },
+            style: { width: CROP_FRAME + "px", height: CROP_FRAME + "px", margin: "0 auto", borderRadius: "9999px", overflow: "hidden", position: "relative", background: "var(--bg-tint)", touchAction: "none", cursor: "grab" },
             onpointerdown: startCropDrag,
           },
           h("img", { "data-field": "cropImg", src: m.imgSrc, draggable: "false", style: { position: "absolute", left: left + "px", top: top + "px", width: width + "px", height: height + "px", pointerEvents: "none", userSelect: "none" } })
@@ -1910,8 +1936,8 @@
         h(
           "div",
           { style: { display: "flex", gap: "12px", marginTop: "20px" } },
-          h("div", { class: "tap", style: { flex: "1", padding: "13px", borderRadius: "12px", textAlign: "center", fontSize: "14px", color: "#5e5d59", background: "#eeece3" }, onclick: cancelCropModal }, "Cancel"),
-          h("div", { class: "tap", style: { flex: "1", padding: "13px", borderRadius: "12px", textAlign: "center", fontSize: "14px", fontWeight: "500", color: "#faf9f5", background: "#c96442" }, onclick: confirmCropModal }, "Use photo")
+          h("div", { class: "tap", style: { flex: "1", padding: "13px", borderRadius: "12px", textAlign: "center", fontSize: "14px", color: "var(--text-secondary)", background: "var(--bg-tint)" }, onclick: cancelCropModal }, "Cancel"),
+          h("div", { class: "tap", style: { flex: "1", padding: "13px", borderRadius: "12px", textAlign: "center", fontSize: "14px", fontWeight: "500", color: "var(--text-on-accent)", background: "var(--accent)" }, onclick: confirmCropModal }, "Use photo")
         )
       )
     );
@@ -1926,7 +1952,7 @@
     const style = {
       width: size + "px", height: size + "px", borderRadius: "9999px", flexShrink: "0",
       display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
-      background: profile.photo ? "transparent" : "#eae7dd",
+      background: profile.photo ? "transparent" : "var(--bg-tint)",
     };
     if (profile.photo) {
       style.backgroundImage = "url(" + profile.photo + ")";
@@ -1935,15 +1961,15 @@
       return h("div", { style });
     }
     if (initial) {
-      return h("div", { style }, h("span", { style: { fontFamily: "var(--serif)", fontSize: Math.round(size * 0.45) + "px", color: "#c96442" } }, initial));
+      return h("div", { style }, h("span", { style: { fontFamily: "var(--serif)", fontSize: Math.round(size * 0.45) + "px", color: "var(--accent)" } }, initial));
     }
-    return h("div", { style }, icon('<path d="M20 21a8 8 0 10-16 0"/><circle cx="12" cy="8" r="5"/>', Math.round(size * 0.55), "#b0aea5"));
+    return h("div", { style }, icon('<path d="M20 21a8 8 0 10-16 0"/><circle cx="12" cy="8" r="5"/>', Math.round(size * 0.55), "var(--text-faint)"));
   }
 
   function chipStyle(on) {
     return on
-      ? { background: "#141413", border: "1px solid #141413", color: "#faf9f5" }
-      : { background: "#faf9f5", border: "1px solid #f0eee6", color: "#141413" };
+      ? { background: "var(--surface-invert-bg)", border: "1px solid var(--surface-invert-bg)", color: "var(--surface-invert-text)" }
+      : { background: "var(--bg-surface)", border: "1px solid var(--border-1)", color: "var(--text-primary)" };
   }
 
   function bottomNav(active) {
@@ -1951,7 +1977,7 @@
       const on = active === screen;
       const wrap = h("div", {
         class: "tap",
-        style: { flex: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", color: on ? "#c96442" : "#5e5d59" },
+        style: { flex: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", color: on ? "var(--accent)" : "var(--text-secondary)" },
         onclick: screen === "community" ? openCommunity : () => go(screen),
       });
       const svgWrap = h("div");
@@ -1965,8 +1991,8 @@
       {
         style: {
           position: "sticky", bottom: "0", marginTop: "auto", display: "flex",
-          background: "rgba(245,244,237,.92)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-          borderTop: "1px solid #f0eee6", padding: "9px 12px calc(env(safe-area-inset-bottom, 0px) + 18px)",
+          background: "color-mix(in srgb, var(--bg-page) 92%, transparent)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+          borderTop: "1px solid var(--border-1)", padding: "9px 12px calc(env(safe-area-inset-bottom, 0px) + 18px)",
         },
       },
       item("home", "Review", '<path d="M3 10.5L12 3l9 7.5V21H3z"/>'),
@@ -1980,11 +2006,11 @@
   // ---------------------------------------------------------------------
 
   function logoMark() {
-    const lineStyle = { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" };
+    const lineStyle = { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" };
     return h(
       "div",
       { style: { display: "flex", alignItems: "center", gap: "13px" } },
-      h("div", { style: { width: "46px", height: "46px", flexShrink: "0", borderRadius: "13px", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "15px", fontWeight: "600", letterSpacing: ".02em" } }, "JSC"),
+      h("div", { style: { width: "46px", height: "46px", flexShrink: "0", borderRadius: "13px", background: "var(--accent)", color: "var(--text-on-accent)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--serif)", fontSize: "15px", fontWeight: "600", letterSpacing: ".02em" } }, "JSC"),
       h(
         "div",
         {},
@@ -1997,16 +2023,16 @@
   function screenBoot() {
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "14px" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "14px" } },
       logoMark(),
-      h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "Loading…")
+      h("div", { style: { fontSize: "13px", color: "var(--text-faint)" } }, "Loading…")
     );
   }
 
   function authField(dataField, type, value, placeholder, onInput) {
     return h("input", {
       "data-field": dataField, type, value, placeholder,
-      style: { width: "100%", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "15px", color: "#141413" },
+      style: { width: "100%", padding: "16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px", fontSize: "15px", color: "var(--text-primary)" },
       // No render() on input, same as the app's other free-text fields —
       // it disrupted typing (autocorrect, key-repeat) even debounced. The
       // Log in/Create account button's enabled state only updates once
@@ -2019,7 +2045,7 @@
   function authButton(label, busyLabel, enabled, busy, onClick) {
     return h(
       "div",
-      { class: enabled && !busy ? "tap" : "", style: { marginTop: "16px", padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: enabled ? "#c96442" : "#f0eee6", color: enabled ? "#faf9f5" : "#b0aea5" }, onclick: enabled && !busy ? onClick : null },
+      { class: enabled && !busy ? "tap" : "", style: { marginTop: "16px", padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: enabled ? "var(--accent)" : "var(--bg-tint)", color: enabled ? "var(--surface-invert-text)" : "var(--text-faint)" }, onclick: enabled && !busy ? onClick : null },
       busy ? busyLabel : label
     );
   }
@@ -2027,7 +2053,7 @@
   function screenAuth() {
     const a = ui.auth;
 
-    const errorNode = a.error ? h("div", { style: { marginTop: "14px", fontSize: "13px", color: "#c96442", lineHeight: "1.5" } }, a.error) : null;
+    const errorNode = a.error ? h("div", { style: { marginTop: "14px", fontSize: "13px", color: "var(--accent)", lineHeight: "1.5" } }, a.error) : null;
 
     let title, subtitle, body;
 
@@ -2038,8 +2064,8 @@
         authButton("I've confirmed — check again", "Checking…", true, a.busy, checkIfConfirmed),
         errorNode,
         h("div", { style: { marginTop: "18px", display: "flex", justifyContent: "space-between" } },
-          h("div", { class: "tap", style: { fontSize: "13px", color: "#5e5d59" }, onclick: () => switchAuthMode("signup") }, "Use a different email"),
-          h("div", { class: "tap", style: { fontSize: "13px", color: "#c96442" }, onclick: resendConfirmationEmail }, "Resend email")
+          h("div", { class: "tap", style: { fontSize: "13px", color: "var(--text-secondary)" }, onclick: () => switchAuthMode("signup") }, "Use a different email"),
+          h("div", { class: "tap", style: { fontSize: "13px", color: "var(--accent)" }, onclick: resendConfirmationEmail }, "Resend email")
         ),
       ];
     } else if (a.mode === "forgot") {
@@ -2049,8 +2075,8 @@
         authField("authEmail", "email", a.email, "Email", (e) => { a.email = e.target.value; }),
         authButton("Send reset link", "Sending…", !!a.email.trim(), a.busy, requestPasswordReset),
         errorNode,
-        h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
-          h("span", { class: "tap", style: { color: "#c96442" }, onclick: () => switchAuthMode("login") }, "Back to log in")
+        h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "var(--text-secondary)" } },
+          h("span", { class: "tap", style: { color: "var(--accent)" }, onclick: () => switchAuthMode("login") }, "Back to log in")
         ),
       ];
     } else if (a.mode === "recover") {
@@ -2072,9 +2098,9 @@
         authField("authPassword", "password", a.password, "Password (min 6 characters)", (e) => { a.password = e.target.value; }),
         authButton("Create account", "Creating…", !!(a.email.trim() && a.password), a.busy, signUp),
         errorNode,
-        h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
+        h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "var(--text-secondary)" } },
           "Already have an account? ",
-          h("span", { class: "tap", style: { color: "#c96442" }, onclick: () => switchAuthMode("login") }, "Log in")
+          h("span", { class: "tap", style: { color: "var(--accent)" }, onclick: () => switchAuthMode("login") }, "Log in")
         ),
       ];
     } else {
@@ -2085,26 +2111,26 @@
         h("div", { style: { height: "10px" } }),
         authField("authPassword", "password", a.password, "Password", (e) => { a.password = e.target.value; }),
         h("div", { style: { marginTop: "10px", textAlign: "right" } },
-          h("span", { class: "tap", style: { fontSize: "12.5px", color: "#5e5d59" }, onclick: () => switchAuthMode("forgot") }, "Forgot password?")
+          h("span", { class: "tap", style: { fontSize: "12.5px", color: "var(--text-secondary)" }, onclick: () => switchAuthMode("forgot") }, "Forgot password?")
         ),
         authButton("Log in", "Logging in…", !!(a.email.trim() && a.password), a.busy, logIn),
         errorNode,
-        h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "#5e5d59" } },
+        h("div", { style: { marginTop: "18px", textAlign: "center", fontSize: "13px", color: "var(--text-secondary)" } },
           "New here? ",
-          h("span", { class: "tap", style: { color: "#c96442" }, onclick: () => switchAuthMode("signup") }, "Create an account")
+          h("span", { class: "tap", style: { color: "var(--accent)" }, onclick: () => switchAuthMode("signup") }, "Create an account")
         ),
       ];
     }
 
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
       h("div", { style: { padding: "8px 20px 0" } }, logoMark()),
       h(
         "div",
         { style: { flex: "1", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 20px" } },
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", lineHeight: "1.15", color: "#141413" } }, title),
-        h("div", { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } }, subtitle),
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", lineHeight: "1.15", color: "var(--text-primary)" } }, title),
+        h("div", { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "var(--text-secondary)" } }, subtitle),
         h("div", { style: { marginTop: "26px" } }, ...body)
       )
     );
@@ -2113,9 +2139,9 @@
   function statTile(label, value) {
     return h(
       "div",
-      { style: { background: "#f5f4ed", borderRadius: "12px", padding: "13px 14px" } },
-      h("div", { style: { fontSize: "10.5px", letterSpacing: ".05em", textTransform: "uppercase", color: "#b0aea5" } }, label),
-      h("div", { style: { marginTop: "6px", fontFamily: "var(--serif)", fontSize: "19px", color: "#141413" } }, value)
+      { style: { background: "var(--bg-page)", borderRadius: "12px", padding: "13px 14px" } },
+      h("div", { style: { fontSize: "10.5px", letterSpacing: ".05em", textTransform: "uppercase", color: "var(--text-faint)" } }, label),
+      h("div", { style: { marginTop: "6px", fontFamily: "var(--serif)", fontSize: "19px", color: "var(--text-primary)" } }, value)
     );
   }
 
@@ -2132,7 +2158,7 @@
 
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
 
       h(
         "div",
@@ -2143,19 +2169,19 @@
           { style: { display: "flex", alignItems: "center", gap: "10px" } },
           h(
             "div",
-            { style: { display: "flex", alignItems: "center", gap: "6px", padding: "5px 11px 5px 9px", borderRadius: "9999px", background: "#faf9f5", border: "1px solid #f0eee6", fontSize: "12px", color: "#5e5d59" } },
-            icon('<path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/>', 13, "#c96442"),
-            h("b", { style: { fontWeight: "600", color: "#141413" } }, String(streakDays())), " days"
+            { style: { display: "flex", alignItems: "center", gap: "6px", padding: "5px 11px 5px 9px", borderRadius: "9999px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", fontSize: "12px", color: "var(--text-secondary)" } },
+            icon('<path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/>', 13, "var(--accent)"),
+            h("b", { style: { fontWeight: "600", color: "var(--text-primary)" } }, String(streakDays())), " days"
           ),
-          h("div", { class: "tap", style: { borderRadius: "9999px", border: "1px solid #f0eee6" }, onclick: openProfile }, avatarNode(data.profile, 30))
+          h("div", { class: "tap", style: { borderRadius: "9999px", border: "1px solid var(--border-1)" }, onclick: openProfile }, avatarNode(data.profile, 30))
         )
       ),
 
       h(
         "div",
         { style: { padding: "6px 20px 0" } },
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "30px", lineHeight: "1.15", color: "#141413", letterSpacing: "-.2px" } }, data.profile.username && data.profile.username.trim() ? "Ready for today, " + data.profile.username.trim() + "." : "Ready for today."),
-        h("div", { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } }, dueLine)
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "30px", lineHeight: "1.15", color: "var(--text-primary)", letterSpacing: "-.2px" } }, data.profile.username && data.profile.username.trim() ? "Ready for today, " + data.profile.username.trim() + "." : "Ready for today."),
+        h("div", { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "var(--text-secondary)" } }, dueLine)
       ),
 
       h(
@@ -2201,20 +2227,20 @@
 
       h(
         "div",
-        { style: { margin: "24px 20px 0", padding: "18px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "18px" } },
+        { style: { margin: "24px 20px 0", padding: "18px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "18px" } },
 
         h(
           "div",
           { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
-          h("div", { style: { fontFamily: "var(--serif)", fontSize: "17px", color: "#141413" } }, "Activity"),
+          h("div", { style: { fontFamily: "var(--serif)", fontSize: "17px", color: "var(--text-primary)" } }, "Activity"),
           h(
             "div",
-            { style: { display: "flex", gap: "4px", background: "#f0eee6", padding: "3px", borderRadius: "9999px" } },
+            { style: { display: "flex", gap: "4px", background: "var(--bg-tint)", padding: "3px", borderRadius: "9999px" } },
             ...[["all", "All"], ["30d", "30d"], ["7d", "7d"]].map(([key, label]) => {
               const on = ui.activityRange === key;
               return h(
                 "div",
-                { class: "tap", style: { padding: "5px 11px", borderRadius: "9999px", fontSize: "12px", fontWeight: on ? "600" : "400", background: on ? "#141413" : "transparent", color: on ? "#faf9f5" : "#5e5d59" }, onclick: () => { ui.activityRange = key; render(); } },
+                { class: "tap", style: { padding: "5px 11px", borderRadius: "9999px", fontSize: "12px", fontWeight: on ? "600" : "400", background: on ? "var(--surface-invert-bg)" : "transparent", color: on ? "var(--surface-invert-text)" : "var(--text-secondary)" }, onclick: () => { ui.activityRange = key; render(); } },
                 label
               );
             })
@@ -2232,7 +2258,7 @@
           statTile("Time in app", formatDuration(activeMsInLastDays(rangeDays)))
         ),
 
-        h("div", { style: { marginTop: "14px", fontSize: "12px", color: "#5e5d59" } }, heatmapTipText(ui.heatmapTip)),
+        h("div", { style: { marginTop: "14px", fontSize: "12px", color: "var(--text-secondary)" } }, heatmapTipText(ui.heatmapTip)),
 
         h(
           "div",
@@ -2276,20 +2302,20 @@
 
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
 
       h(
         "div",
         { style: { display: "flex", alignItems: "center", gap: "10px", padding: "8px 20px 0" } },
-        h("div", { class: "tap", style: { width: "34px", height: "34px", borderRadius: "10px", background: "#faf9f5", border: "1px solid #f0eee6", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: () => go("home") }, icon('<path d="M19 12H5M12 19l-7-7 7-7"/>', 16, "#141413")),
-        h("div", { style: { fontSize: "13px", color: "#5e5d59" } }, "Step 1 of 2")
+        h("div", { class: "tap", style: { width: "34px", height: "34px", borderRadius: "10px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: () => go("home") }, icon('<path d="M19 12H5M12 19l-7-7 7-7"/>', 16, "var(--text-primary)")),
+        h("div", { style: { fontSize: "13px", color: "var(--text-secondary)" } }, "Step 1 of 2")
       ),
 
       h(
         "div",
         { style: { padding: "18px 20px 0" } },
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", lineHeight: "1.15", color: "#141413" } }, "Which tags today?"),
-        h("div", { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } }, "Pick one or several. Only cards that are due in those tags enter the session.")
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", lineHeight: "1.15", color: "var(--text-primary)" } }, "Which tags today?"),
+        h("div", { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "var(--text-secondary)" } }, "Pick one or several. Only cards that are due in those tags enter the session.")
       ),
 
       h(
@@ -2301,17 +2327,17 @@
             "div",
             { class: "tap chip", style: Object.assign({ display: "flex", alignItems: "center", gap: "9px", padding: "11px 15px", borderRadius: "9999px" }, chipStyle(on)), onclick: () => toggleTagSel(t) },
             h("span", { style: { fontSize: "14px" } }, t),
-            h("span", { style: { fontSize: "11.5px", color: on ? "rgba(250,249,245,.6)" : "#b0aea5" } }, dueCards([t]).length + " due")
+            h("span", { style: { fontSize: "11.5px", color: on ? "color-mix(in srgb, var(--surface-invert-text) 60%, transparent)" : "var(--text-faint)" } }, dueCards([t]).length + " due")
           );
         })
       ),
 
       h(
         "div",
-        { style: { margin: "24px 20px 0", padding: "16px 18px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px" } },
+        { style: { margin: "24px 20px 0", padding: "16px 18px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px" } },
         h(
           "div",
-          { style: { fontSize: "12px", color: "#5e5d59", lineHeight: "1.6" } },
+          { style: { fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.6" } },
           ui.sel.length
             ? ui.sel.join(" · ") + " — " + selDue + " cards due, " + n + " in this session."
             : "No tags picked yet. Leave it empty to review everything due (" + due + " cards)."
@@ -2322,22 +2348,22 @@
 
       h(
         "div",
-        { style: { position: "sticky", bottom: "0", padding: "14px 20px calc(env(safe-area-inset-bottom, 0px) + 22px)", background: "rgba(245,244,237,.94)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", borderTop: "1px solid #f0eee6" } },
+        { style: { position: "sticky", bottom: "0", padding: "14px 20px calc(env(safe-area-inset-bottom, 0px) + 22px)", background: "color-mix(in srgb, var(--bg-page) 94%, transparent)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", borderTop: "1px solid var(--border-1)" } },
         n
           ? h(
               "div",
-              { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "#c96442", color: "#faf9f5" }, onclick: () => beginSession(ui.sel) },
+              { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "var(--accent)", color: "var(--text-on-accent)" }, onclick: () => beginSession(ui.sel) },
               "Review " + n + " cards"
             )
           : practiceN
             ? h(
                 "div",
-                { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "#141413", color: "#faf9f5" }, onclick: () => beginSession(ui.sel, true) },
+                { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "var(--surface-invert-bg)", color: "var(--surface-invert-text)" }, onclick: () => beginSession(ui.sel, true) },
                 "Nothing due — practice " + practiceN + " anyway"
               )
             : h(
                 "div",
-                { style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "#f0eee6", color: "#b0aea5" } },
+                { style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "var(--bg-tint)", color: "var(--text-faint)" } },
                 "No cards in these tags"
               )
       )
@@ -2476,20 +2502,20 @@
 
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
 
       h(
         "div",
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", color: "#141413" } }, "Cards"),
-        h("div", { class: "tap", style: { width: "36px", height: "36px", borderRadius: "18px", background: "#141413", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: () => go("add") }, icon('<path d="M12 5v14M5 12h14"/>', 18, "#faf9f5"))
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "28px", color: "var(--text-primary)" } }, "Cards"),
+        h("div", { class: "tap", style: { width: "36px", height: "36px", borderRadius: "18px", background: "var(--surface-invert-bg)", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: () => go("add") }, icon('<path d="M12 5v14M5 12h14"/>', 18, "var(--surface-invert-text)"))
       ),
 
       h(
         "div",
-        { style: { margin: "14px 20px 0", display: "flex", alignItems: "center", gap: "10px", padding: "11px 14px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "12px" } },
-        icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.5-4.5"/>', 15, "#b0aea5"),
-        h("input", { "data-field": "query", value: ui.query, placeholder: "Search sentence, note or tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14px", color: "#141413" }, oninput: (e) => { ui.query = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: flushRender })
+        { style: { margin: "14px 20px 0", display: "flex", alignItems: "center", gap: "10px", padding: "11px 14px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "12px" } },
+        icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.5-4.5"/>', 15, "var(--text-faint)"),
+        h("input", { "data-field": "query", value: ui.query, placeholder: "Search sentence, note or tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14px", color: "var(--text-primary)" }, oninput: (e) => { ui.query = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: flushRender })
       ),
 
       h(
@@ -2506,8 +2532,8 @@
             chip,
             h(
               "div",
-              { class: "tap", style: { position: "absolute", right: "-4px", top: "-4px", width: "16px", height: "16px", borderRadius: "8px", background: "#f5f4ed", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: (e) => { e.stopPropagation(); openDeleteTagSheet(f); } },
-              icon('<path d="M6 6l12 12M18 6 6 18"/>', 8, "#5e5d59", { "stroke-width": "3.4" })
+              { class: "tap", style: { position: "absolute", right: "-4px", top: "-4px", width: "16px", height: "16px", borderRadius: "8px", background: "var(--bg-page)", border: "1px solid var(--border-2b)", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: (e) => { e.stopPropagation(); openDeleteTagSheet(f); } },
+              icon('<path d="M6 6l12 12M18 6 6 18"/>', 8, "var(--text-secondary)", { "stroke-width": "3.4" })
             )
           );
         })
@@ -2516,8 +2542,8 @@
       h(
         "div",
         { style: { margin: "16px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between" } },
-        h("span", { style: { fontSize: "11.5px", color: "#b0aea5" } }, list.length + " of " + data.cards.length + " cards"),
-        list.length ? h("div", { class: "tap", style: { fontSize: "14px", fontWeight: "500", color: "#c96442" }, onclick: enterSelectMode }, "Select") : null
+        h("span", { style: { fontSize: "11.5px", color: "var(--text-faint)" } }, list.length + " of " + data.cards.length + " cards"),
+        list.length ? h("div", { class: "tap", style: { fontSize: "14px", fontWeight: "500", color: "var(--accent)" }, onclick: enterSelectMode }, "Select") : null
       ),
 
       h(
@@ -2526,28 +2552,28 @@
         ...list.map((c) =>
           h(
             "div",
-            { class: "tap row-hover", style: { padding: "15px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "12px" }, onclick: () => openEditCard(c) },
+            { class: "tap row-hover", style: { padding: "15px 16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "12px" }, onclick: () => openEditCard(c) },
             h(
               "div",
               { style: { display: "flex", alignItems: "flex-start", gap: "12px" } },
               h(
                 "div",
                 { style: { flex: "1", minWidth: "0" } },
-                h("div", { style: { fontFamily: "var(--jp)", fontSize: "16px", lineHeight: "1.5", color: "#141413" } }, c.front),
-                h("div", { style: { marginTop: "5px", fontSize: "13px", color: "#5e5d59" } }, c.back)
+                h("div", { style: { fontFamily: "var(--jp)", fontSize: "16px", lineHeight: "1.5", color: "var(--text-primary)" } }, c.front),
+                h("div", { style: { marginTop: "5px", fontSize: "13px", color: "var(--text-secondary)" } }, c.back)
               ),
               c.audio
-                ? h("div", { class: "tap", style: { width: "30px", height: "30px", borderRadius: "9999px", background: "#f5f4ed", border: "1px solid #f0eee6", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0" }, onclick: (e) => { e.stopPropagation(); playCardAudio(c); } }, icon('<path d="M8 5l11 7-11 7z"/>', 12, "#c96442"))
-                : icon('<path d="M9 18l6-6-6-6"/>', 15, "#ddd8c8", { style: "flex-shrink:0;margin-top:7px" })
+                ? h("div", { class: "tap", style: { width: "30px", height: "30px", borderRadius: "9999px", background: "var(--bg-page)", border: "1px solid var(--border-1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0" }, onclick: (e) => { e.stopPropagation(); playCardAudio(c); } }, icon('<path d="M8 5l11 7-11 7z"/>', 12, "var(--accent)"))
+                : icon('<path d="M9 18l6-6-6-6"/>', 15, "var(--text-faintest)", { style: "flex-shrink:0;margin-top:7px" })
             ),
             h(
               "div",
               { style: { marginTop: "11px", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" } },
-              ...c.tags.map((t) => h("div", { style: { padding: "4px 9px", borderRadius: "9999px", background: "#f0eee6", color: "#5e5d59", fontSize: "10.5px" } }, t)),
+              ...c.tags.map((t) => h("div", { style: { padding: "4px 9px", borderRadius: "9999px", background: "var(--bg-tint)", color: "var(--text-secondary)", fontSize: "10.5px" } }, t)),
               h(
                 "div",
                 { style: { marginLeft: "auto" } },
-                h("span", { style: { fontSize: "10.5px", color: c.dueAt <= Date.now() ? "#c96442" : "#b0aea5" } }, dueLabel(c))
+                h("span", { style: { fontSize: "10.5px", color: c.dueAt <= Date.now() ? "var(--accent)" : "var(--text-faint)" } }, dueLabel(c))
               )
             )
           )
@@ -2568,20 +2594,20 @@
 
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
 
       h(
         "div",
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
-        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15.5px", color: "#5e5d59" }, onclick: exitSelectMode }, icon('<path d="M15 18l-6-6 6-6"/>', 15, "#5e5d59"), "Cards"),
-        h("div", { class: "tap", style: { fontSize: "15px", color: "#5e5d59" }, onclick: exitSelectMode }, "Cancel")
+        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15.5px", color: "var(--text-secondary)" }, onclick: exitSelectMode }, icon('<path d="M15 18l-6-6 6-6"/>', 15, "var(--text-secondary)"), "Cards"),
+        h("div", { class: "tap", style: { fontSize: "15px", color: "var(--text-secondary)" }, onclick: exitSelectMode }, "Cancel")
       ),
 
       h(
         "div",
         { style: { padding: "16px 20px 0", display: "flex", flexDirection: "column", gap: "5px" } },
-        h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Select cards"),
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", fontWeight: "500", color: "#141413" } }, ui.filter === "All" ? "All cards" : ui.filter)
+        h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Select cards"),
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", fontWeight: "500", color: "var(--text-primary)" } }, ui.filter === "All" ? "All cards" : ui.filter)
       ),
 
       h(
@@ -2590,10 +2616,10 @@
         h(
           "div",
           { class: "tap chip", style: Object.assign({ display: "flex", alignItems: "center", gap: "7px", height: "32px", padding: "0 14px", borderRadius: "9999px", fontSize: "13.5px", fontWeight: "500" }, chipStyle(allSelected)), onclick: () => toggleSelectAll(ids) },
-          allSelected ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 13, "#faf9f5", { "stroke-width": "2.6" }) : null,
+          allSelected ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 13, "var(--surface-invert-text)", { "stroke-width": "2.6" }) : null,
           "All " + ids.length + " cards"
         ),
-        h("span", { style: { fontSize: "12px", color: "#87867f" } }, n + " of " + ids.length + " selected")
+        h("span", { style: { fontSize: "12px", color: "var(--text-muted)" } }, n + " of " + ids.length + " selected")
       ),
 
       h(
@@ -2603,17 +2629,17 @@
           const checked = ui.selectedIds.includes(c.id);
           return h(
             "div",
-            { class: "tap", style: { display: "flex", alignItems: "center", gap: "13px", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "12px" }, onclick: () => toggleCardSelected(c.id) },
+            { class: "tap", style: { display: "flex", alignItems: "center", gap: "13px", padding: "14px 16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "12px" }, onclick: () => toggleCardSelected(c.id) },
             h(
               "div",
-              { style: { width: "21px", height: "21px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: checked ? "#c96442" : "transparent", border: checked ? "none" : "1.6px solid #d1cfc5" } },
-              checked ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "#faf9f5", { "stroke-width": "3.4" }) : null
+              { style: { width: "21px", height: "21px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: checked ? "var(--accent)" : "transparent", border: checked ? "none" : "1.6px solid var(--text-faintest)" } },
+              checked ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "var(--text-on-accent)", { "stroke-width": "3.4" }) : null
             ),
             h(
               "div",
               { style: { display: "flex", flexDirection: "column", gap: "5px", minWidth: "0" } },
-              h("span", { style: { fontFamily: "var(--jp)", fontSize: "16px", color: "#141413" } }, c.front),
-              h("span", { style: { fontSize: "13px", color: "#5e5d59" } }, c.back)
+              h("span", { style: { fontFamily: "var(--jp)", fontSize: "16px", color: "var(--text-primary)" } }, c.front),
+              h("span", { style: { fontSize: "13px", color: "var(--text-secondary)" } }, c.back)
             )
           );
         })
@@ -2622,8 +2648,8 @@
       h(
         "div",
         { style: { padding: "14px 20px calc(env(safe-area-inset-bottom, 0px) + 18px)", display: "flex", gap: "10px" } },
-        h("div", { class: n ? "tap" : "", style: { flex: "1", padding: "16px", borderRadius: "9999px", textAlign: "center", fontSize: "15.5px", fontWeight: "500", background: n ? "#141413" : "#f0eee6", color: n ? "#faf9f5" : "#b0aea5" }, onclick: n ? openBulkTagSheet : null }, "Add tag"),
-        h("div", { class: n ? "tap" : "", style: { width: "112px", flexShrink: "0", padding: "16px", borderRadius: "9999px", textAlign: "center", fontSize: "15.5px", fontWeight: "500", background: "#faf9f5", border: "1px solid #e8e6dc", color: n ? "#b53333" : "#e0b3b3" }, onclick: n ? bulkDeleteSelected : null }, "Delete")
+        h("div", { class: n ? "tap" : "", style: { flex: "1", padding: "16px", borderRadius: "9999px", textAlign: "center", fontSize: "15.5px", fontWeight: "500", background: n ? "var(--surface-invert-bg)" : "var(--bg-tint)", color: n ? "var(--surface-invert-text)" : "var(--text-faint)" }, onclick: n ? openBulkTagSheet : null }, "Add tag"),
+        h("div", { class: n ? "tap" : "", style: { width: "112px", flexShrink: "0", padding: "16px", borderRadius: "9999px", textAlign: "center", fontSize: "15.5px", fontWeight: "500", background: "var(--bg-surface)", border: "1px solid var(--border-2b)", color: n ? "var(--danger)" : "#e0b3b3" }, onclick: n ? bulkDeleteSelected : null }, "Delete")
       ),
 
       ui.bulkTagSheet ? bulkTagSheetNode() : null
@@ -2643,49 +2669,49 @@
       { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", flexDirection: "column", justifyContent: "flex-end", zIndex: "20" }, onclick: closeBulkTagSheet },
       h(
         "div",
-        { style: { background: "#faf9f5", borderRadius: "24px 24px 0 0", padding: "20px 20px 24px", display: "flex", flexDirection: "column", gap: "14px", maxHeight: "82%", overflow: "auto" }, onclick: (e) => e.stopPropagation() },
+        { style: { background: "var(--bg-surface)", borderRadius: "24px 24px 0 0", padding: "20px 20px 24px", display: "flex", flexDirection: "column", gap: "14px", maxHeight: "82%", overflow: "auto" }, onclick: (e) => e.stopPropagation() },
         h(
           "div",
           { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
           h("span", { style: { fontFamily: "var(--serif)", fontSize: "19px", fontWeight: "500" } }, "Add tag to " + ui.selectedIds.length + " card" + (ui.selectedIds.length === 1 ? "" : "s")),
-          h("span", { class: "tap", style: { fontSize: "14px", color: "#5e5d59" }, onclick: closeBulkTagSheet }, "Cancel")
+          h("span", { class: "tap", style: { fontSize: "14px", color: "var(--text-secondary)" }, onclick: closeBulkTagSheet }, "Cancel")
         ),
         h(
           "div",
-          { style: { display: "flex", alignItems: "center", gap: "9px", padding: "11px 14px", background: "#f5f4ed", border: "1px solid #e8e6dc", borderRadius: "12px" } },
-          icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.5-4.5"/>', 15, "#87867f"),
-          h("input", { "data-field": "bulkTagQuery", value: s.query, placeholder: "Find or create a tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14.5px", color: "#141413" }, oninput: (e) => { s.query = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: flushRender })
+          { style: { display: "flex", alignItems: "center", gap: "9px", padding: "11px 14px", background: "var(--bg-page)", border: "1px solid var(--border-2b)", borderRadius: "12px" } },
+          icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.5-4.5"/>', 15, "var(--text-muted)"),
+          h("input", { "data-field": "bulkTagQuery", value: s.query, placeholder: "Find or create a tag", style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14.5px", color: "var(--text-primary)" }, oninput: (e) => { s.query = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: flushRender })
         ),
         pendingNew.length
-          ? h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px" } }, ...pendingNew.map((t) => h("div", { class: "tap chip", style: Object.assign({ padding: "8px 13px", borderRadius: "9999px", fontSize: "13px", display: "flex", alignItems: "center", gap: "7px" }, chipStyle(true)), onclick: () => toggleBulkTagChecked(t) }, t, icon('<path d="M18 6L6 18M6 6l12 12"/>', 10, "#faf9f5"))))
+          ? h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px" } }, ...pendingNew.map((t) => h("div", { class: "tap chip", style: Object.assign({ padding: "8px 13px", borderRadius: "9999px", fontSize: "13px", display: "flex", alignItems: "center", gap: "7px" }, chipStyle(true)), onclick: () => toggleBulkTagChecked(t) }, t, icon('<path d="M18 6L6 18M6 6l12 12"/>', 10, "var(--surface-invert-text)"))))
           : null,
         filtered.length
           ? h(
               "div",
-              { style: { background: "#f5f4ed", borderRadius: "16px", overflow: "hidden" } },
+              { style: { background: "var(--bg-page)", borderRadius: "16px", overflow: "hidden" } },
               ...filtered.map((t, i) => h(
                 "div",
                 {},
-                i ? h("div", { style: { height: "1px", background: "#f0eee6" } }) : null,
+                i ? h("div", { style: { height: "1px", background: "var(--border-1)" } }) : null,
                 h(
                   "div",
                   { class: "tap", style: { padding: "14px 15px", display: "flex", alignItems: "center", justifyContent: "space-between" }, onclick: () => toggleBulkTagChecked(t) },
                   h("span", { style: { fontSize: "15px" } }, t),
                   h(
                     "div",
-                    { style: { width: "19px", height: "19px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: s.checked.includes(t) ? "#c96442" : "transparent", border: s.checked.includes(t) ? "none" : "1.6px solid #d1cfc5" } },
-                    s.checked.includes(t) ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "#faf9f5", { "stroke-width": "3.4" }) : null
+                    { style: { width: "19px", height: "19px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: s.checked.includes(t) ? "var(--accent)" : "transparent", border: s.checked.includes(t) ? "none" : "1.6px solid var(--text-faintest)" } },
+                    s.checked.includes(t) ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "var(--text-on-accent)", { "stroke-width": "3.4" }) : null
                   )
                 )
               ))
             )
           : null,
         isNew
-          ? h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "9px", color: "#c96442", fontSize: "14.5px", fontWeight: "500" }, onclick: createBulkTag }, icon('<path d="M12 5v14M5 12h14"/>', 17, "#c96442"), "Create “" + s.query.trim() + "”")
+          ? h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "9px", color: "var(--accent)", fontSize: "14.5px", fontWeight: "500" }, onclick: createBulkTag }, icon('<path d="M12 5v14M5 12h14"/>', 17, "var(--accent)"), "Create “" + s.query.trim() + "”")
           : null,
         h(
           "div",
-          { class: s.checked.length ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: s.checked.length ? "#141413" : "#f0eee6", color: s.checked.length ? "#faf9f5" : "#b0aea5" }, onclick: s.checked.length ? applyBulkTag : null },
+          { class: s.checked.length ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: s.checked.length ? "var(--surface-invert-bg)" : "var(--bg-tint)", color: s.checked.length ? "var(--surface-invert-text)" : "var(--text-faint)" }, onclick: s.checked.length ? applyBulkTag : null },
           "Add to " + ui.selectedIds.length + " card" + (ui.selectedIds.length === 1 ? "" : "s")
         )
       )
@@ -2700,29 +2726,29 @@
       { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "12px", zIndex: "20" }, onclick: closeDeleteTagSheet },
       h(
         "div",
-        { style: { background: "#faf9f5", borderRadius: "18px", overflow: "hidden", marginBottom: "10px" }, onclick: (e) => e.stopPropagation() },
+        { style: { background: "var(--bg-surface)", borderRadius: "18px", overflow: "hidden", marginBottom: "10px" }, onclick: (e) => e.stopPropagation() },
         h(
           "div",
-          { style: { padding: "15px 18px 13px", display: "flex", flexDirection: "column", gap: "4px", textAlign: "center", background: "#f5f4ed" } },
-          h("span", { style: { fontSize: "12.5px", letterSpacing: ".4px", textTransform: "uppercase", color: "#87867f" } }, 'Delete "' + tag + '"'),
-          h("span", { style: { fontSize: "12.5px", lineHeight: "1.5", color: "#87867f" } }, count + " card" + (count === 1 ? "" : "s") + " carr" + (count === 1 ? "ies" : "y") + " this tag. Choose what to remove.")
+          { style: { padding: "15px 18px 13px", display: "flex", flexDirection: "column", gap: "4px", textAlign: "center", background: "var(--bg-page)" } },
+          h("span", { style: { fontSize: "12.5px", letterSpacing: ".4px", textTransform: "uppercase", color: "var(--text-muted)" } }, 'Delete "' + tag + '"'),
+          h("span", { style: { fontSize: "12.5px", lineHeight: "1.5", color: "var(--text-muted)" } }, count + " card" + (count === 1 ? "" : "s") + " carr" + (count === 1 ? "ies" : "y") + " this tag. Choose what to remove.")
         ),
-        h("div", { style: { height: "1px", background: "#f0eee6" } }),
+        h("div", { style: { height: "1px", background: "var(--border-1)" } }),
         h(
           "div",
           { class: "tap", style: { padding: "15px 18px", display: "flex", flexDirection: "column", gap: "3px", alignItems: "center" }, onclick: () => deleteTagOnly(tag) },
           h("span", { style: { fontSize: "17px", fontWeight: "500" } }, "Delete tag only"),
-          h("span", { style: { fontSize: "12px", color: "#87867f", textAlign: "center" } }, "Cards stay in their other tags, or untagged")
+          h("span", { style: { fontSize: "12px", color: "var(--text-muted)", textAlign: "center" } }, "Cards stay in their other tags, or untagged")
         ),
-        h("div", { style: { height: "1px", background: "#f0eee6" } }),
+        h("div", { style: { height: "1px", background: "var(--border-1)" } }),
         h(
           "div",
           { class: "tap", style: { padding: "15px 18px", display: "flex", flexDirection: "column", gap: "3px", alignItems: "center" }, onclick: () => deleteTagAndCards(tag) },
-          h("span", { style: { fontSize: "17px", color: "#b53333" } }, "Delete tag and relevant cards"),
-          h("span", { style: { fontSize: "12px", color: "#87867f", textAlign: "center" } }, "Removes all " + count + " cards carrying this tag")
+          h("span", { style: { fontSize: "17px", color: "var(--danger)" } }, "Delete tag and relevant cards"),
+          h("span", { style: { fontSize: "12px", color: "var(--text-muted)", textAlign: "center" } }, "Removes all " + count + " cards carrying this tag")
         )
       ),
-      h("div", { class: "tap", style: { background: "#faf9f5", borderRadius: "18px", padding: "17px 16px", textAlign: "center", fontSize: "17px", fontWeight: "500" }, onclick: closeDeleteTagSheet }, "Cancel")
+      h("div", { class: "tap", style: { background: "var(--bg-surface)", borderRadius: "18px", padding: "17px 16px", textAlign: "center", fontSize: "17px", fontWeight: "500" }, onclick: closeDeleteTagSheet }, "Cancel")
     );
   }
 
@@ -2739,8 +2765,8 @@
   function communityBackChip(lang, dark) {
     return h(
       "div",
-      { style: { padding: "4px 9px", borderRadius: "11px", background: dark ? "#30302e" : "#eceae1", border: dark ? "none" : "1px solid #e8e6dc", display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px", fontWeight: "500", color: dark ? "#f5f4ed" : "#4d4c48", alignSelf: "flex-start", flexShrink: "0", lineHeight: "1.3" } },
-      icon('<path d="M3 6h12M9 3v3M11 17c-3.5-1-5.5-4.5-5.5-11M4 14c4 0 7-2 7-8"/><path d="M13 20l4-11 4 11M14.4 17h5.2"/>', 11, dark ? "#f5f4ed" : "#4d4c48", { style: "flex-shrink:0" }),
+      { style: { padding: "4px 9px", borderRadius: "11px", background: dark ? "#30302e" : "var(--bg-tint)", border: dark ? "none" : "1px solid var(--border-2b)", display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px", fontWeight: "500", color: dark ? "#f5f4ed" : "var(--text-secondary)", alignSelf: "flex-start", flexShrink: "0", lineHeight: "1.3" } },
+      icon('<path d="M3 6h12M9 3v3M11 17c-3.5-1-5.5-4.5-5.5-11M4 14c4 0 7-2 7-8"/><path d="M13 20l4-11 4 11M14.4 17h5.2"/>', 11, dark ? "#f5f4ed" : "var(--text-secondary)", { style: "flex-shrink:0" }),
       lang
     );
   }
@@ -2749,14 +2775,14 @@
     const added = hasLocalCardsFrom(row.id);
     return h(
       "div",
-      { class: "tap", style: { background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px", padding: "14px", display: "flex", flexDirection: "column", gap: "6px", minHeight: "118px" }, onclick: () => openTagDetail(row) },
-      h("span", { style: { fontFamily: "var(--serif)", fontSize: "16.5px", fontWeight: "500", color: "#141413" } }, row.name),
-      h("span", { style: { fontSize: "11.5px", color: "#87867f" } }, "by " + row.owner_display_name),
+      { class: "tap", style: { background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "16px", padding: "14px", display: "flex", flexDirection: "column", gap: "6px", minHeight: "118px" }, onclick: () => openTagDetail(row) },
+      h("span", { style: { fontFamily: "var(--serif)", fontSize: "16.5px", fontWeight: "500", color: "var(--text-primary)" } }, row.name),
+      h("span", { style: { fontSize: "11.5px", color: "var(--text-muted)" } }, "by " + row.owner_display_name),
       communityBackChip(row.back_language, false),
-      h("span", { style: { marginTop: "auto", fontSize: "11.5px", color: "#87867f" } }, row.card_count + " cards"),
+      h("span", { style: { marginTop: "auto", fontSize: "11.5px", color: "var(--text-muted)" } }, row.card_count + " cards"),
       added
-        ? h("span", { style: { display: "flex", alignItems: "center", gap: "5px", fontSize: "11.5px", color: "#5e5d59" } }, icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "#5e5d59", { "stroke-width": "3" }), "Added")
-        : h("span", { style: { fontSize: "11.5px", color: "#c96442", fontWeight: "500" } }, row.download_count.toLocaleString() + " downloads")
+        ? h("span", { style: { display: "flex", alignItems: "center", gap: "5px", fontSize: "11.5px", color: "var(--text-secondary)" } }, icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "var(--text-secondary)", { "stroke-width": "3" }), "Added")
+        : h("span", { style: { fontSize: "11.5px", color: "var(--accent)", fontWeight: "500" } }, row.download_count.toLocaleString() + " downloads")
     );
   }
 
@@ -2769,7 +2795,7 @@
 
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
 
       h(
         "div",
@@ -2777,16 +2803,16 @@
         h(
           "div",
           { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
-          h("h1", { style: { margin: "0", fontFamily: "var(--serif)", fontSize: "26px", fontWeight: "500", color: "#141413" } }, "Community"),
-          h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "13.5px", fontWeight: "500", color: "#c96442" }, onclick: openMyTags }, "My tags", chevronNode())
+          h("h1", { style: { margin: "0", fontFamily: "var(--serif)", fontSize: "26px", fontWeight: "500", color: "var(--text-primary)" } }, "Community"),
+          h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "13.5px", fontWeight: "500", color: "var(--accent)" }, onclick: openMyTags }, "My tags", chevronNode())
         ),
         h(
           "div",
-          { style: { height: "44px", borderRadius: "22px", background: "#faf9f5", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", gap: "9px", padding: "0 15px" } },
-          icon('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>', 15, "#87867f"),
+          { style: { height: "44px", borderRadius: "22px", background: "var(--bg-surface)", border: "1px solid var(--border-2b)", display: "flex", alignItems: "center", gap: "9px", padding: "0 15px" } },
+          icon('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>', 15, "var(--text-muted)"),
           h("input", {
             "data-field": "communitySearch", value: ui.communitySearch, placeholder: "Search by keyword",
-            style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14.5px", color: "#141413" },
+            style: { flex: "1", border: "none", outline: "none", background: "transparent", fontSize: "14.5px", color: "var(--text-primary)" },
             oninput: (e) => { ui.communitySearch = e.target.value; if (!e.isComposing) scheduleRender(); },
             onblur: flushRender,
           })
@@ -2795,7 +2821,7 @@
           ? h(
               "div",
               { class: "scrollx", "data-remember-scroll": "community-filters", style: { display: "flex", alignItems: "center", gap: "8px", overflow: "auto" } },
-              h("span", { style: { fontSize: "11.5px", color: "#87867f", flexShrink: "0" } }, "Back"),
+              h("span", { style: { fontSize: "11.5px", color: "var(--text-muted)", flexShrink: "0" } }, "Back"),
               ...chips.map((lang) =>
                 h(
                   "div",
@@ -2811,9 +2837,9 @@
         "div",
         { "data-remember-scroll": "community-feed", style: { flex: "1", overflow: "auto", padding: "14px 20px 18px", display: "flex", flexDirection: "column", gap: "12px" } },
         ui.communityLoading
-          ? h("div", { style: { fontSize: "13px", color: "#b0aea5", textAlign: "center", padding: "30px 0" } }, "Loading…")
+          ? h("div", { style: { fontSize: "13px", color: "var(--text-faint)", textAlign: "center", padding: "30px 0" } }, "Loading…")
           : filtered.length === 0
-            ? h("div", { style: { fontSize: "13.5px", color: "#87867f", textAlign: "center", padding: "40px 20px", lineHeight: "1.6" } }, "No shared tags match yet — check back soon, or be the first to share one from My Tags.")
+            ? h("div", { style: { fontSize: "13.5px", color: "var(--text-muted)", textAlign: "center", padding: "40px 20px", lineHeight: "1.6" } }, "No shared tags match yet — check back soon, or be the first to share one from My Tags.")
             : [
                 hero
                   ? h(
@@ -2857,29 +2883,29 @@
       { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", alignItems: "center", justifyContent: "center", padding: "26px", zIndex: "20" }, onclick: closeDownloadDraft },
       h(
         "div",
-        { style: { width: "100%", background: "#faf9f5", borderRadius: "20px", padding: "22px 20px", display: "flex", flexDirection: "column", gap: "14px" }, onclick: (e) => e.stopPropagation() },
+        { style: { width: "100%", background: "var(--bg-surface)", borderRadius: "20px", padding: "22px 20px", display: "flex", flexDirection: "column", gap: "14px" }, onclick: (e) => e.stopPropagation() },
         h("span", { style: { fontFamily: "var(--serif)", fontSize: "20px", fontWeight: "500" } }, "Add this tag"),
         browsableTags().includes(d.row.name)
           ? h(
               "p",
-              { style: { margin: "0", fontSize: "14px", lineHeight: "1.55", color: "#5e5d59" } },
+              { style: { margin: "0", fontSize: "14px", lineHeight: "1.55", color: "var(--text-secondary)" } },
               "You already have a tag called ",
-              h("strong", { style: { color: "#141413", fontWeight: "500" } }, d.row.name),
+              h("strong", { style: { color: "var(--text-primary)", fontWeight: "500" } }, d.row.name),
               ". Give the downloaded one a different name to keep them apart."
             )
-          : h("p", { style: { margin: "0", fontSize: "14px", lineHeight: "1.55", color: "#5e5d59" } }, "This will add " + d.row.card_count + " cards to a local tag."),
+          : h("p", { style: { margin: "0", fontSize: "14px", lineHeight: "1.55", color: "var(--text-secondary)" } }, "This will add " + d.row.card_count + " cards to a local tag."),
         h("input", {
           "data-field": "downloadDraftName", value: d.name, placeholder: "Tag name",
-          style: { height: "50px", borderRadius: "12px", background: "#f5f4ed", border: "1.5px solid #c96442", padding: "0 15px", fontFamily: "var(--serif)", fontSize: "17px", color: "#141413" },
+          style: { height: "50px", borderRadius: "12px", background: "var(--bg-page)", border: "1.5px solid var(--accent)", padding: "0 15px", fontFamily: "var(--serif)", fontSize: "17px", color: "var(--text-primary)" },
           oninput: (e) => { d.name = e.target.value; },
           onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); submitDownload(); } },
         }),
-        d.error ? h("div", { style: { fontSize: "12.5px", color: "#c96442" } }, d.error) : null,
+        d.error ? h("div", { style: { fontSize: "12.5px", color: "var(--accent)" } }, d.error) : null,
         h(
           "div",
           { style: { display: "flex", gap: "10px", marginTop: "2px" } },
-          h("div", { class: "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "#e8e6dc", color: "#4d4c48", fontSize: "15px", fontWeight: "500" }, onclick: closeDownloadDraft }, "Cancel"),
-          h("div", { class: d.busy ? "" : "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "#141413", color: "#faf9f5", fontSize: "15px", fontWeight: "500", opacity: d.busy ? ".6" : "1" }, onclick: d.busy ? null : submitDownload }, d.busy ? "Adding…" : "Add tag")
+          h("div", { class: "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "var(--border-2b)", color: "var(--text-secondary)", fontSize: "15px", fontWeight: "500" }, onclick: closeDownloadDraft }, "Cancel"),
+          h("div", { class: d.busy ? "" : "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "var(--surface-invert-bg)", color: "var(--surface-invert-text)", fontSize: "15px", fontWeight: "500", opacity: d.busy ? ".6" : "1" }, onclick: d.busy ? null : submitDownload }, d.busy ? "Adding…" : "Add tag")
         )
       )
     );
@@ -2892,19 +2918,19 @@
 
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
 
       h(
         "div",
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
-        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15.5px", color: "#5e5d59" }, onclick: () => { ui.tagDetail = null; go("community"); } }, icon('<path d="M15 18l-6-6 6-6"/>', 15, "#5e5d59"), "Community"),
+        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15.5px", color: "var(--text-secondary)" }, onclick: () => { ui.tagDetail = null; go("community"); } }, icon('<path d="M15 18l-6-6 6-6"/>', 15, "var(--text-secondary)"), "Community"),
         // Reporting your own tag isn't a meaningful action, so the
         // entry point just isn't shown on it.
         row.owner_id !== data.userId
           ? h(
               "div",
-              { class: t.reportSubmitted ? "" : "tap", style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "13.5px", color: "#87867f" }, onclick: t.reportSubmitted ? null : openReportSheet },
-              icon('<path d="M12 9v4.5M12 17h.01M10.3 4.1 2.6 17.4A1.8 1.8 0 0 0 4.2 20h15.6a1.8 1.8 0 0 0 1.6-2.6L13.7 4.1a1.9 1.9 0 0 0-3.4 0z"/>', 15, "#87867f"),
+              { class: t.reportSubmitted ? "" : "tap", style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "13.5px", color: "var(--text-muted)" }, onclick: t.reportSubmitted ? null : openReportSheet },
+              icon('<path d="M12 9v4.5M12 17h.01M10.3 4.1 2.6 17.4A1.8 1.8 0 0 0 4.2 20h15.6a1.8 1.8 0 0 0 1.6-2.6L13.7 4.1a1.9 1.9 0 0 0-3.4 0z"/>', 15, "var(--text-muted)"),
               t.reportSubmitted ? "Reported" : "Report"
             )
           : null
@@ -2917,37 +2943,37 @@
         h(
           "div",
           { style: { display: "flex", flexDirection: "column", gap: "9px" } },
-          h("span", { style: { fontFamily: "var(--serif)", fontSize: "27px", fontWeight: "500", color: "#141413", lineHeight: "1.15" } }, row.name),
-          h("span", { style: { fontSize: "13px", color: "#87867f" } }, "by " + row.owner_display_name),
+          h("span", { style: { fontFamily: "var(--serif)", fontSize: "27px", fontWeight: "500", color: "var(--text-primary)", lineHeight: "1.15" } }, row.name),
+          h("span", { style: { fontSize: "13px", color: "var(--text-muted)" } }, "by " + row.owner_display_name),
           h(
             "div",
             { style: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "8px" } },
             communityBackChip(row.back_language, false),
-            h("span", { style: { fontSize: "13px", color: "#87867f" } }, row.card_count + " cards · " + row.download_count.toLocaleString() + " downloads")
+            h("span", { style: { fontSize: "13px", color: "var(--text-muted)" } }, row.card_count + " cards · " + row.download_count.toLocaleString() + " downloads")
           )
         ),
 
-        row.description ? h("p", { style: { margin: "0", fontSize: "14.5px", lineHeight: "1.6", color: "#4d4c48" } }, row.description) : null,
+        row.description ? h("p", { style: { margin: "0", fontSize: "14.5px", lineHeight: "1.6", color: "var(--text-secondary)" } }, row.description) : null,
 
         h(
           "div",
           { style: { display: "flex", flexDirection: "column", gap: "9px" } },
-          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, "Cards in this tag"),
+          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-secondary)" } }, "Cards in this tag"),
           t.loading
-            ? h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "Loading…")
+            ? h("div", { style: { fontSize: "13px", color: "var(--text-faint)" } }, "Loading…")
             : h(
                 "div",
-                { style: { background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px", overflow: "hidden" } },
+                { style: { background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "16px", overflow: "hidden" } },
                 ...t.previewCards.map((c, i) =>
                   h(
                     "div",
                     {},
-                    i ? h("div", { style: { height: "1px", background: "#f0eee6" } }) : null,
+                    i ? h("div", { style: { height: "1px", background: "var(--border-1)" } }) : null,
                     h(
                       "div",
                       { style: { padding: "12px 15px", display: "flex", flexDirection: "column", gap: "3px" } },
-                      h("span", { style: { fontFamily: "var(--jp)", fontSize: "14.5px", color: "#141413" } }, c.front),
-                      h("span", { style: { fontSize: "12px", color: "#87867f" } }, c.back)
+                      h("span", { style: { fontFamily: "var(--jp)", fontSize: "14.5px", color: "var(--text-primary)" } }, c.front),
+                      h("span", { style: { fontSize: "12px", color: "var(--text-muted)" } }, c.back)
                     )
                   )
                 )
@@ -2957,18 +2983,18 @@
 
       h(
         "div",
-        { style: { padding: "14px 20px 18px", background: "#f5f4ed" } },
+        { style: { padding: "14px 20px 18px", background: "var(--bg-page)" } },
         added
           ? h(
               "div",
-              { style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "#f0eee6", color: "#5e5d59", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" } },
-              icon('<path d="m5 13 4.5 4.5L19 7"/>', 15, "#5e5d59", { "stroke-width": "3" }),
+              { style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "var(--bg-tint)", color: "var(--text-secondary)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" } },
+              icon('<path d="m5 13 4.5 4.5L19 7"/>', 15, "var(--text-secondary)", { "stroke-width": "3" }),
               "Already added"
             )
           : h(
               "div",
-              { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "#c96442", color: "#faf9f5", display: "flex", alignItems: "center", justifyContent: "center", gap: "9px" }, onclick: () => startDownloadFlow(row) },
-              icon('<path d="M12 4v12m0 0 4-4m-4 4-4-4M4 20h16"/>', 17, "#faf9f5"),
+              { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: "var(--accent)", color: "var(--text-on-accent)", display: "flex", alignItems: "center", justifyContent: "center", gap: "9px" }, onclick: () => startDownloadFlow(row) },
+              icon('<path d="M12 4v12m0 0 4-4m-4 4-4-4M4 20h16"/>', 17, "var(--text-on-accent)"),
               "Download tag"
             )
       ),
@@ -3020,30 +3046,30 @@
       { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "12px", zIndex: "20" }, onclick: closeReportSheet },
       h(
         "div",
-        { style: { background: "#faf9f5", borderRadius: "22px 22px 18px 18px", padding: "20px 20px 22px", display: "flex", flexDirection: "column", gap: "16px" }, onclick: (e) => e.stopPropagation() },
+        { style: { background: "var(--bg-surface)", borderRadius: "22px 22px 18px 18px", padding: "20px 20px 22px", display: "flex", flexDirection: "column", gap: "16px" }, onclick: (e) => e.stopPropagation() },
         h(
           "div",
           { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
           h("span", { style: { fontFamily: "var(--serif)", fontSize: "20px", fontWeight: "500" } }, "Report this tag"),
-          h("span", { class: "tap", style: { fontSize: "14.5px", color: "#5e5d59" }, onclick: closeReportSheet }, "Cancel")
+          h("span", { class: "tap", style: { fontSize: "14.5px", color: "var(--text-secondary)" }, onclick: closeReportSheet }, "Cancel")
         ),
-        h("p", { style: { margin: "0", fontSize: "13.5px", lineHeight: "1.55", color: "#5e5d59" } }, "Tell us what's wrong. Reported tags are hidden from the feed while we review them."),
+        h("p", { style: { margin: "0", fontSize: "13.5px", lineHeight: "1.55", color: "var(--text-secondary)" } }, "Tell us what's wrong. Reported tags are hidden from the feed while we review them."),
         h(
           "div",
-          { style: { background: "#f5f4ed", borderRadius: "14px", overflow: "hidden" } },
+          { style: { background: "var(--bg-page)", borderRadius: "14px", overflow: "hidden" } },
           ...REPORT_REASONS.map((r, i) =>
             h(
               "div",
               {},
-              i ? h("div", { style: { height: "1px", background: "#e8e6dc" } }) : null,
+              i ? h("div", { style: { height: "1px", background: "var(--border-2b)" } }) : null,
               h(
                 "div",
                 { class: "tap", style: { padding: "14px 15px", display: "flex", alignItems: "center", justifyContent: "space-between" }, onclick: () => { t.reportReason = r.value; render(); } },
-                h("span", { style: { fontSize: "15px", color: "#141413" } }, r.label),
+                h("span", { style: { fontSize: "15px", color: "var(--text-primary)" } }, r.label),
                 h(
                   "div",
-                  { style: { width: "19px", height: "19px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: t.reportReason === r.value ? "#c96442" : "transparent", border: t.reportReason === r.value ? "none" : "1.6px solid #d1cfc5" } },
-                  t.reportReason === r.value ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "#faf9f5", { "stroke-width": "3.4" }) : null
+                  { style: { width: "19px", height: "19px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: t.reportReason === r.value ? "var(--accent)" : "transparent", border: t.reportReason === r.value ? "none" : "1.6px solid var(--text-faintest)" } },
+                  t.reportReason === r.value ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "var(--text-on-accent)", { "stroke-width": "3.4" }) : null
                 )
               )
             )
@@ -3051,13 +3077,13 @@
         ),
         h("textarea", {
           "data-field": "reportDetail", rows: "3", placeholder: "Add detail (optional)",
-          style: { borderRadius: "12px", background: "#f5f4ed", border: "1px solid #e8e6dc", padding: "13px 15px", fontSize: "14px", color: "#141413", resize: "none" },
+          style: { borderRadius: "12px", background: "var(--bg-page)", border: "1px solid var(--border-2b)", padding: "13px 15px", fontSize: "14px", color: "var(--text-primary)", resize: "none" },
           oninput: (e) => { t.reportDetail = e.target.value.slice(0, 500); }, onblur: flushRender,
         }, t.reportDetail),
-        t.reportError ? h("div", { style: { fontSize: "12.5px", color: "#c96442" } }, t.reportError) : null,
+        t.reportError ? h("div", { style: { fontSize: "12.5px", color: "var(--accent)" } }, t.reportError) : null,
         h(
           "div",
-          { class: t.reportReason && !t.reportBusy ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: t.reportReason && !t.reportBusy ? "#b53333" : "#f0eee6", color: t.reportReason && !t.reportBusy ? "#faf9f5" : "#b0aea5" }, onclick: t.reportReason && !t.reportBusy ? submitReport : null },
+          { class: t.reportReason && !t.reportBusy ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: t.reportReason && !t.reportBusy ? "var(--danger)" : "var(--bg-tint)", color: t.reportReason && !t.reportBusy ? "var(--surface-invert-text)" : "var(--text-faint)" }, onclick: t.reportReason && !t.reportBusy ? submitReport : null },
           t.reportBusy ? "Submitting…" : "Submit report"
         )
       )
@@ -3070,8 +3096,8 @@
     const shared = sharedRowForTag(t);
 
     let statusText = count + " card" + (count === 1 ? "" : "s");
-    let statusColor = "#87867f";
-    if (shared && shared.status === "removed") { statusText = "Removed after being reported"; statusColor = "#b53333"; }
+    let statusColor = "var(--text-muted)";
+    if (shared && shared.status === "removed") { statusText = "Removed after being reported"; statusColor = "var(--danger)"; }
     else if (shared && shared.status === "active") { statusText += " · shared publicly"; }
     else if (shared && shared.status === "unpublished") { statusText += " · unpublished"; }
     else if (count > 0 && eligible === 0) { /* no suffix — the "Downloaded" section heading already says this */ }
@@ -3086,7 +3112,7 @@
       h(
         "div",
         { style: { display: "flex", flexDirection: "column", gap: "3px", minWidth: "0" } },
-        h("span", { style: { fontSize: "15.5px", fontWeight: "500", color: "#141413" } }, t),
+        h("span", { style: { fontSize: "15.5px", fontWeight: "500", color: "var(--text-primary)" } }, t),
         h("span", { style: { fontSize: "12px", color: statusColor } }, statusText)
       ),
       h(
@@ -3095,12 +3121,12 @@
         h(
           "div",
           { class: canToggleShare ? "tap" : "", onclick: canToggleShare ? (shared ? (isLive ? () => toggleUnshareTag(shared) : () => openReshareFlow(t, shared)) : () => openShareFlow(t)) : null },
-          icon('<path d="M12 16V4m0 0 4 4m-4-4-4 4M4 18v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1"/>', 17, isLive ? "#5e5d59" : canToggleShare ? "#c96442" : "#d1cfc5")
+          icon('<path d="M12 16V4m0 0 4 4m-4-4-4 4M4 18v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1"/>', 17, isLive ? "var(--text-secondary)" : canToggleShare ? "var(--accent)" : "var(--text-faintest)")
         ),
         h(
           "div",
           { class: "tap", onclick: () => openRenameTagSheet(t) },
-          icon('<path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4"/>', 17, "#5e5d59")
+          icon('<path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4"/>', 17, "var(--text-secondary)")
         )
       )
     );
@@ -3113,19 +3139,19 @@
       { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", alignItems: "center", justifyContent: "center", padding: "26px", zIndex: "20" }, onclick: closeRenameTagSheet },
       h(
         "div",
-        { style: { width: "100%", background: "#faf9f5", borderRadius: "20px", padding: "22px 20px", display: "flex", flexDirection: "column", gap: "14px" }, onclick: (e) => e.stopPropagation() },
+        { style: { width: "100%", background: "var(--bg-surface)", borderRadius: "20px", padding: "22px 20px", display: "flex", flexDirection: "column", gap: "14px" }, onclick: (e) => e.stopPropagation() },
         h("span", { style: { fontFamily: "var(--serif)", fontSize: "20px", fontWeight: "500" } }, "Rename this tag"),
         h("input", {
           value: s.newName,
-          style: { height: "50px", borderRadius: "12px", background: "#f5f4ed", border: "1.5px solid #c96442", padding: "0 15px", fontFamily: "var(--serif)", fontSize: "17px", color: "#141413" },
+          style: { height: "50px", borderRadius: "12px", background: "var(--bg-page)", border: "1.5px solid var(--accent)", padding: "0 15px", fontFamily: "var(--serif)", fontSize: "17px", color: "var(--text-primary)" },
           oninput: (e) => { s.newName = e.target.value; },
           onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); submitRenameTag(); } },
         }),
         h(
           "div",
           { style: { display: "flex", gap: "10px", marginTop: "2px" } },
-          h("div", { class: "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "#e8e6dc", color: "#4d4c48", fontSize: "15px", fontWeight: "500" }, onclick: closeRenameTagSheet }, "Cancel"),
-          h("div", { class: "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "#141413", color: "#faf9f5", fontSize: "15px", fontWeight: "500" }, onclick: submitRenameTag }, "Save")
+          h("div", { class: "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "var(--border-2b)", color: "var(--text-secondary)", fontSize: "15px", fontWeight: "500" }, onclick: closeRenameTagSheet }, "Cancel"),
+          h("div", { class: "tap", style: { flex: "1", padding: "14px", borderRadius: "12px", textAlign: "center", background: "var(--surface-invert-bg)", color: "var(--surface-invert-text)", fontSize: "15px", fontWeight: "500" }, onclick: submitRenameTag }, "Save")
         )
       )
     );
@@ -3158,10 +3184,10 @@
     return h(
       "div",
       { style: { display: "flex", flexDirection: "column", gap: "9px" } },
-      h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, title),
+      h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-secondary)" } }, title),
       tags.length
         ? settingsCard(...tags.map((t) => myTagRow(t)))
-        : h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "None yet.")
+        : h("div", { style: { fontSize: "13px", color: "var(--text-faint)" } }, "None yet.")
     );
   }
 
@@ -3171,33 +3197,33 @@
 
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
 
       h(
         "div",
-        { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", padding: "8px 20px 0", fontSize: "15.5px", color: "#5e5d59" }, onclick: () => go("community") },
-        icon('<path d="M15 18l-6-6 6-6"/>', 15, "#5e5d59"), "Community"
+        { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", padding: "8px 20px 0", fontSize: "15.5px", color: "var(--text-secondary)" }, onclick: () => go("community") },
+        icon('<path d="M15 18l-6-6 6-6"/>', 15, "var(--text-secondary)"), "Community"
       ),
 
       h(
         "div",
         { style: { flex: "1", overflow: "auto", padding: "14px 20px 18px", display: "flex", flexDirection: "column", gap: "20px" } },
 
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "27px", fontWeight: "500", color: "#141413" } }, "My tags"),
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "27px", fontWeight: "500", color: "var(--text-primary)" } }, "My tags"),
 
         ui.myTagsFrozen
           ? h(
               "div",
-              { style: { padding: "14px 16px", background: "#faf3f0", border: "1px solid #f0e2dc", borderRadius: "14px", fontSize: "12.5px", lineHeight: "1.6", color: "#8a4a35" } },
+              { style: { padding: "14px 16px", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: "14px", fontSize: "12.5px", lineHeight: "1.6", color: "var(--danger-text)" } },
               "Sharing is paused on this account until " + formatFrozenUntil(ui.myTagsFrozenUntil) + " after multiple shared tags were removed for violating community guidelines. Contact us if you think this is a mistake."
             )
           : null,
 
         ui.myTagsLoading
-          ? h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "Loading…")
+          ? h("div", { style: { fontSize: "13px", color: "var(--text-faint)" } }, "Loading…")
           : anyTags
             ? [myTagsSection("Shared", shared), myTagsSection("Unshared", unshared), myTagsSection("Downloaded", downloaded)]
-            : h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "No tags yet — add some cards first.")
+            : h("div", { style: { fontSize: "13px", color: "var(--text-faint)" } }, "No tags yet — add some cards first.")
       ),
 
       ui.renameTagSheet ? renameTagSheetNode() : null
@@ -3212,13 +3238,13 @@
     const n = d.selectedIds.length;
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
 
       h(
         "div",
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
-        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15.5px", color: "#5e5d59" }, onclick: () => { ui.shareDraft = null; go("myTags"); } }, icon('<path d="M15 18l-6-6 6-6"/>', 15, "#5e5d59"), "My tags"),
-        h("div", { class: "tap", style: { fontSize: "15px", color: "#5e5d59" }, onclick: () => { ui.shareDraft = null; go("myTags"); } }, "Cancel")
+        h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15.5px", color: "var(--text-secondary)" }, onclick: () => { ui.shareDraft = null; go("myTags"); } }, icon('<path d="M15 18l-6-6 6-6"/>', 15, "var(--text-secondary)"), "My tags"),
+        h("div", { class: "tap", style: { fontSize: "15px", color: "var(--text-secondary)" }, onclick: () => { ui.shareDraft = null; go("myTags"); } }, "Cancel")
       ),
 
       h(
@@ -3228,8 +3254,8 @@
         h(
           "div",
           { style: { padding: "14px 0 0", display: "flex", flexDirection: "column", gap: "5px" } },
-          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, d.republishId ? "Re-share tag" : "Share tag"),
-          h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", fontWeight: "500", color: "#141413" } }, d.tagName)
+          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-secondary)" } }, d.republishId ? "Re-share tag" : "Share tag"),
+          h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", fontWeight: "500", color: "var(--text-primary)" } }, d.tagName)
         ),
 
         h(
@@ -3238,39 +3264,39 @@
           h(
             "div",
             { class: "tap chip", style: Object.assign({ display: "flex", alignItems: "center", gap: "7px", height: "32px", padding: "0 14px", borderRadius: "9999px", fontSize: "13.5px", fontWeight: "500" }, chipStyle(allEligibleSelected)), onclick: () => toggleShareSelectAll(eligibleIds) },
-            allEligibleSelected ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 13, "#faf9f5", { "stroke-width": "2.6" }) : null,
+            allEligibleSelected ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 13, "var(--surface-invert-text)", { "stroke-width": "2.6" }) : null,
             "All " + eligibleIds.length + " cards"
           ),
-          h("span", { style: { fontSize: "12px", color: "#87867f" } }, n + " of " + eligibleIds.length + " selected")
+          h("span", { style: { fontSize: "12px", color: "var(--text-muted)" } }, n + " of " + eligibleIds.length + " selected")
         ),
 
         h(
           "div",
           { style: { display: "flex", flexDirection: "column", gap: "9px" } },
-          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "#5e5d59" } }, "Cards in this tag"),
+          h("span", { style: { fontSize: "10.5px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-secondary)" } }, "Cards in this tag"),
           h(
             "div",
-            { style: { background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px", overflow: "hidden" } },
+            { style: { background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "16px", overflow: "hidden" } },
             ...cardsMatchingTags([d.tagName]).map((c, i) => {
               const ineligible = !!c.sourceSharedTagId;
               const checked = d.selectedIds.includes(c.id);
               return h(
                 "div",
                 {},
-                i ? h("div", { style: { height: "1px", background: "#f0eee6" } }) : null,
+                i ? h("div", { style: { height: "1px", background: "var(--border-1)" } }) : null,
                 h(
                   "div",
                   { class: ineligible ? "" : "tap", style: { padding: "12px 15px", display: "flex", alignItems: "center", gap: "12px", opacity: ineligible ? ".55" : "1" }, onclick: ineligible ? null : () => toggleShareCardSelected(c.id) },
                   h(
                     "div",
-                    { style: { width: "20px", height: "20px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: checked ? "#c96442" : "transparent", border: checked ? "none" : "1.6px solid #d1cfc5" } },
-                    checked ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "#faf9f5", { "stroke-width": "3.4" }) : null
+                    { style: { width: "20px", height: "20px", borderRadius: "9999px", flexShrink: "0", display: "flex", alignItems: "center", justifyContent: "center", background: checked ? "var(--accent)" : "transparent", border: checked ? "none" : "1.6px solid var(--text-faintest)" } },
+                    checked ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "var(--text-on-accent)", { "stroke-width": "3.4" }) : null
                   ),
                   h(
                     "div",
                     { style: { display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" } },
-                    h("span", { style: { fontFamily: "var(--jp)", fontSize: "14.5px", color: "#141413" } }, c.front),
-                    h("span", { style: { fontSize: "11.5px", color: "#87867f" } }, ineligible ? "From community — can't be shared" : c.back)
+                    h("span", { style: { fontFamily: "var(--jp)", fontSize: "14.5px", color: "var(--text-primary)" } }, c.front),
+                    h("span", { style: { fontSize: "11.5px", color: "var(--text-muted)" } }, ineligible ? "From community — can't be shared" : c.back)
                   )
                 )
               );
@@ -3290,32 +3316,32 @@
           // trivially centered like everything else in this app.
           h(
             "div",
-            { class: "tap", style: { height: "46px", borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 15px" }, onclick: () => { d.langSheetOpen = true; render(); } },
-            h("span", { style: { fontSize: "12.5px", color: "#5e5d59" } }, "Back-card language"),
+            { class: "tap", style: { height: "46px", borderRadius: "12px", background: "var(--bg-surface)", border: "1px solid var(--border-2b)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 15px" }, onclick: () => { d.langSheetOpen = true; render(); } },
+            h("span", { style: { fontSize: "12.5px", color: "var(--text-secondary)" } }, "Back-card language"),
             h(
               "div",
               { style: { display: "flex", alignItems: "center", gap: "6px" } },
-              h("span", { style: { fontSize: "14.5px", fontWeight: "500", color: "#141413" } }, d.backLanguage),
-              icon('<path d="m6 9 6 6 6-6"/>', 13, "#87867f")
+              h("span", { style: { fontSize: "14.5px", fontWeight: "500", color: "var(--text-primary)" } }, d.backLanguage),
+              icon('<path d="m6 9 6 6 6-6"/>', 13, "var(--text-muted)")
             )
           ),
           h("textarea", {
             "data-field": "shareDescription", rows: "3", placeholder: "Describe this tag for other learners…",
-            style: { borderRadius: "12px", background: "#faf9f5", border: "1px solid #e8e6dc", padding: "12px 15px", fontSize: "14px", color: "#141413", resize: "none" },
+            style: { borderRadius: "12px", background: "var(--bg-surface)", border: "1px solid var(--border-2b)", padding: "12px 15px", fontSize: "14px", color: "var(--text-primary)", resize: "none" },
             // No render() on input, same as the app's other free-text
             // fields (front/back/profile/auth) — this field doesn't filter
             // anything live the way the search boxes do, so there's no
             // reason to risk it. The counter below just lags until blur.
             oninput: (e) => { d.description = e.target.value.slice(0, 500); }, onblur: flushRender,
           }, d.description),
-          h("span", { style: { fontSize: "11.5px", color: "#b0aea5", textAlign: "right" } }, d.description.length + " / 500"),
-          d.error ? h("div", { style: { fontSize: "12.5px", color: "#c96442" } }, d.error) : null,
+          h("span", { style: { fontSize: "11.5px", color: "var(--text-faint)", textAlign: "right" } }, d.description.length + " / 500"),
+          d.error ? h("div", { style: { fontSize: "12.5px", color: "var(--accent)" } }, d.error) : null,
           h(
             "div",
-            { class: n >= 50 && !d.busy ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: n >= 50 && !d.busy ? "#141413" : "#f0eee6", color: n >= 50 && !d.busy ? "#faf9f5" : "#b0aea5" }, onclick: n >= 50 && !d.busy ? submitShareTag : null },
+            { class: n >= 50 && !d.busy ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: n >= 50 && !d.busy ? "var(--surface-invert-bg)" : "var(--bg-tint)", color: n >= 50 && !d.busy ? "var(--surface-invert-text)" : "var(--text-faint)" }, onclick: n >= 50 && !d.busy ? submitShareTag : null },
             d.busy ? (d.republishId ? "Re-sharing…" : "Sharing…") : (d.republishId ? "Re-share " : "Share ") + n + " cards"
           ),
-          h("span", { style: { fontSize: "11.5px", color: "#b0aea5", textAlign: "center" } }, "At least 50 original cards are needed to share a tag.")
+          h("span", { style: { fontSize: "11.5px", color: "var(--text-faint)", textAlign: "center" } }, "At least 50 original cards are needed to share a tag.")
         )
       ),
 
@@ -3330,13 +3356,13 @@
       { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "12px", zIndex: "20" }, onclick: () => { d.langSheetOpen = false; render(); } },
       h(
         "div",
-        { style: { background: "#faf9f5", borderRadius: "18px", overflow: "hidden", marginBottom: "10px", maxHeight: "60vh", display: "flex", flexDirection: "column" }, onclick: (e) => e.stopPropagation() },
+        { style: { background: "var(--bg-surface)", borderRadius: "18px", overflow: "hidden", marginBottom: "10px", maxHeight: "60vh", display: "flex", flexDirection: "column" }, onclick: (e) => e.stopPropagation() },
         h(
           "div",
-          { style: { padding: "15px 18px 13px", textAlign: "center", background: "#f5f4ed", flexShrink: "0" } },
-          h("span", { style: { fontSize: "12.5px", letterSpacing: ".4px", textTransform: "uppercase", color: "#87867f" } }, "Back-card language")
+          { style: { padding: "15px 18px 13px", textAlign: "center", background: "var(--bg-page)", flexShrink: "0" } },
+          h("span", { style: { fontSize: "12.5px", letterSpacing: ".4px", textTransform: "uppercase", color: "var(--text-muted)" } }, "Back-card language")
         ),
-        h("div", { style: { height: "1px", background: "#f0eee6", flexShrink: "0" } }),
+        h("div", { style: { height: "1px", background: "var(--border-1)", flexShrink: "0" } }),
         h(
           "div",
           { style: { overflow: "auto" } },
@@ -3344,12 +3370,12 @@
             h(
               "div",
               {},
-              i ? h("div", { style: { height: "1px", background: "#f0eee6" } }) : null,
+              i ? h("div", { style: { height: "1px", background: "var(--border-1)" } }) : null,
               h(
                 "div",
                 { class: "tap", style: { padding: "15px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }, onclick: () => { d.backLanguage = lang; d.langSheetOpen = false; render(); } },
-                h("span", { style: { fontSize: "16px", color: "#141413" } }, lang),
-                lang === d.backLanguage ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 15, "#c96442", { "stroke-width": "3" }) : null
+                h("span", { style: { fontSize: "16px", color: "var(--text-primary)" } }, lang),
+                lang === d.backLanguage ? icon('<path d="m5 13 4.5 4.5L19 7"/>', 15, "var(--accent)", { "stroke-width": "3" }) : null
               )
             )
           )
@@ -3371,61 +3397,61 @@
     const audioModePanel = d.audioMode === "system"
       ? h(
           "div",
-          { style: { marginTop: "10px", padding: "18px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px" } },
+          { style: { marginTop: "10px", padding: "18px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "16px" } },
           h(
             "div",
             { style: { display: "flex", alignItems: "center", gap: "15px" } },
             h(
               "div",
-              { class: "tap", style: { width: "52px", height: "52px", borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0", background: d.front.trim() && !d.romajiLoading ? "#f5f4ed" : "#f0eee6" }, onclick: () => d.front.trim() && !d.romajiLoading && speak(d.kana || d.front) },
-              icon('<path d="M8 5l11 7-11 7z"/>', 19, "#c96442")
+              { class: "tap", style: { width: "52px", height: "52px", borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0", background: d.front.trim() && !d.romajiLoading ? "var(--bg-page)" : "var(--bg-tint)" }, onclick: () => d.front.trim() && !d.romajiLoading && speak(d.kana || d.front) },
+              icon('<path d="M8 5l11 7-11 7z"/>', 19, "var(--accent)")
             ),
             h(
               "div",
               { style: { flex: "1", minWidth: "0" } },
-              h("div", { style: { fontSize: "13.5px", color: "#141413" } }, d.romajiLoading ? "Getting the reading ready…" : d.front.trim() ? "Tap to preview" : "Type a sentence to generate audio"),
-              h("div", { style: { marginTop: "4px", fontSize: "11.5px", color: "#b0aea5" } }, "Spoken aloud automatically during review")
+              h("div", { style: { fontSize: "13.5px", color: "var(--text-primary)" } }, d.romajiLoading ? "Getting the reading ready…" : d.front.trim() ? "Tap to preview" : "Type a sentence to generate audio"),
+              h("div", { style: { marginTop: "4px", fontSize: "11.5px", color: "var(--text-faint)" } }, "Spoken aloud automatically during review")
             )
           )
         )
       : h(
           "div",
-          { style: { marginTop: "10px", padding: "18px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px", display: "flex", alignItems: "center", gap: "15px" } },
+          { style: { marginTop: "10px", padding: "18px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "16px", display: "flex", alignItems: "center", gap: "15px" } },
           h(
             "div",
-            { class: "tap", style: { width: "52px", height: "52px", borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0", background: d.recState === "active" ? "#d97757" : "#141413" }, onclick: tapRecord },
+            { class: "tap", style: { width: "52px", height: "52px", borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0", background: d.recState === "active" ? "var(--accent-2)" : "var(--surface-invert-bg)" }, onclick: tapRecord },
             d.recState === "idle"
-              ? icon('<path d="M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>', 21, "#faf9f5")
+              ? icon('<path d="M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>', 21, "var(--surface-invert-text)")
               : d.recState === "active"
-                ? h("div", { style: { width: "16px", height: "16px", borderRadius: "3px", background: "#faf9f5", animation: "sc-rec 1.1s ease-in-out infinite" } })
-                : icon('<path d="M8 5l11 7-11 7z"/>', 19, "#faf9f5")
+                ? h("div", { style: { width: "16px", height: "16px", borderRadius: "3px", background: "var(--text-on-accent)", animation: "sc-rec 1.1s ease-in-out infinite" } })
+                : icon('<path d="M8 5l11 7-11 7z"/>', 19, "var(--surface-invert-text)")
           ),
           h(
             "div",
             { style: { flex: "1", minWidth: "0" } },
-            h("div", { style: { fontSize: "13.5px", color: "#141413" } }, d.recState === "idle" ? "Tap to record your voice" : d.recState === "active" ? "Recording · 0:0" + d.recSec : "Recorded"),
-            d.recState !== "idle" ? h("div", { style: { marginTop: "8px", fontSize: "11px", color: "#b0aea5" } }, d.recState === "active" ? "Tap again to stop" : "") : null
+            h("div", { style: { fontSize: "13.5px", color: "var(--text-primary)" } }, d.recState === "idle" ? "Tap to record your voice" : d.recState === "active" ? "Recording · 0:0" + d.recSec : "Recorded"),
+            d.recState !== "idle" ? h("div", { style: { marginTop: "8px", fontSize: "11px", color: "var(--text-faint)" } }, d.recState === "active" ? "Tap again to stop" : "") : null
           ),
-          d.recState === "done" ? h("div", { class: "tap", style: { fontSize: "12px", color: "#5e5d59", flexShrink: "0" }, onclick: () => { d.recState = "idle"; d.recording = null; render(); } }, "Redo") : null
+          d.recState === "done" ? h("div", { class: "tap", style: { fontSize: "12px", color: "var(--text-secondary)", flexShrink: "0" }, onclick: () => { d.recState = "idle"; d.recording = null; render(); } }, "Redo") : null
         );
 
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
 
       h(
         "div",
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
-        h("div", { class: "tap", style: { fontSize: "14px", color: "#5e5d59" }, onclick: cancelCardForm }, "Cancel"),
-        h("div", { style: { fontSize: "13px", color: ui.cardSavedFlash ? "#3a9d5d" : "#b0aea5" } }, ui.cardSavedFlash ? "Saved ✓" : d.editingId ? "Edit card" : "New card"),
-        h("div", { class: canSave ? "tap" : "", style: { fontSize: "14px", fontWeight: "500", color: canSave ? "#c96442" : "#b0aea5" }, onclick: canSave ? saveCard : null }, "Save")
+        h("div", { class: "tap", style: { fontSize: "14px", color: "var(--text-secondary)" }, onclick: cancelCardForm }, "Cancel"),
+        h("div", { style: { fontSize: "13px", color: ui.cardSavedFlash ? "var(--success)" : "var(--text-faint)" } }, ui.cardSavedFlash ? "Saved ✓" : d.editingId ? "Edit card" : "New card"),
+        h("div", { class: canSave ? "tap" : "", style: { fontSize: "14px", fontWeight: "500", color: canSave ? "var(--accent)" : "var(--text-faint)" }, onclick: canSave ? saveCard : null }, "Save")
       ),
 
       h(
         "div",
         { style: { padding: "22px 20px 0" } },
-        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Front · sentence"),
-        h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.front = e.target.value; }, onblur: handleFrontBlur }, d.front)
+        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Front · sentence"),
+        h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "var(--text-primary)" }, oninput: (e) => { d.front = e.target.value; }, onblur: handleFrontBlur }, d.front)
       ),
 
       h(
@@ -3434,14 +3460,14 @@
         h(
           "div",
           { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
-          h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Romaji · auto-generated"),
-          d.romajiLoading ? h("div", { style: { fontSize: "11px", color: "#b0aea5" } }, "Generating…") : null
+          h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Romaji · auto-generated"),
+          d.romajiLoading ? h("div", { style: { fontSize: "11px", color: "var(--text-faint)" } }, "Generating…") : null
         ),
-        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" }, oninput: (e) => { d.romaji = e.target.value; d.romajiAuto = false; d.romajiSuggestion = null; }, onblur: flushRender }),
+        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px", fontSize: "14px", color: "var(--text-primary)" }, oninput: (e) => { d.romaji = e.target.value; d.romajiAuto = false; d.romajiSuggestion = null; }, onblur: flushRender }),
         d.romajiSuggestion
           ? h(
               "div",
-              { class: "tap", style: { marginTop: "8px", fontSize: "12.5px", color: "#c96442" }, onclick: acceptRomajiSuggestion },
+              { class: "tap", style: { marginTop: "8px", fontSize: "12.5px", color: "var(--accent)" }, onclick: acceptRomajiSuggestion },
               "Suggested: " + d.romajiSuggestion + " · Tap to use"
             )
           : null
@@ -3450,8 +3476,8 @@
       h(
         "div",
         { style: { padding: "20px 20px 0" } },
-        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Back · note"),
-        h("textarea", { "data-field": "back", rows: "2", placeholder: "I swam yesterday.", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "17px", lineHeight: "1.5", color: "#141413" }, oninput: (e) => { d.back = e.target.value; }, onblur: flushRender }, d.back)
+        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Back · note"),
+        h("textarea", { "data-field": "back", rows: "2", placeholder: "I swam yesterday.", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "17px", lineHeight: "1.5", color: "var(--text-primary)" }, oninput: (e) => { d.back = e.target.value; }, onblur: flushRender }, d.back)
       ),
 
       h(
@@ -3460,8 +3486,8 @@
         h(
           "div",
           { style: { display: "flex", alignItems: "baseline", justifyContent: "space-between" } },
-          h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Tags · optional"),
-          h("div", { style: { fontSize: "11.5px", color: "#b0aea5" } }, d.tags.length ? d.tags.length + " selected" : 'defaults to "' + UNTAGGED_TAG + '"')
+          h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Tags · optional"),
+          h("div", { style: { fontSize: "11.5px", color: "var(--text-faint)" } }, d.tags.length ? d.tags.length + " selected" : 'defaults to "' + UNTAGGED_TAG + '"')
         ),
         h(
           "div",
@@ -3474,18 +3500,18 @@
         h(
           "div",
           { style: { marginTop: "10px", display: "flex", gap: "8px" } },
-          h("input", { "data-field": "newTag", value: d.newTag, placeholder: "New tag", style: { flex: "1", padding: "11px 14px", background: "#faf9f5", border: "1px dashed #ddd8c8", borderRadius: "9999px", fontSize: "13px", color: "#141413" }, oninput: (e) => { d.newTag = e.target.value; }, onblur: flushRender, onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addNewTag(); } } }),
-          h("div", { class: "tap", style: { padding: "11px 18px", borderRadius: "9999px", background: "#f0eee6", color: "#141413", fontSize: "13px" }, onclick: addNewTag }, "Add")
+          h("input", { "data-field": "newTag", value: d.newTag, placeholder: "New tag", style: { flex: "1", padding: "11px 14px", background: "var(--bg-surface)", border: "1px dashed var(--text-faintest)", borderRadius: "9999px", fontSize: "13px", color: "var(--text-primary)" }, oninput: (e) => { d.newTag = e.target.value; }, onblur: flushRender, onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addNewTag(); } } }),
+          h("div", { class: "tap", style: { padding: "11px 18px", borderRadius: "9999px", background: "var(--bg-tint)", color: "var(--text-primary)", fontSize: "13px" }, onclick: addNewTag }, "Add")
         )
       ),
 
       h(
         "div",
         { style: { padding: "22px 20px 0" } },
-        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "Audio · optional"),
+        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Audio · optional"),
         h(
           "div",
-          { style: { marginTop: "11px", display: "flex", gap: "4px", padding: "4px", background: "#f0eee6", borderRadius: "12px" } },
+          { style: { marginTop: "11px", display: "flex", gap: "4px", padding: "4px", background: "var(--bg-tint)", borderRadius: "12px" } },
           ...[
             { key: "system", name: "Generated", note: "Read from the sentence" },
             { key: "record", name: "Your voice", note: "Record it yourself" },
@@ -3493,22 +3519,22 @@
             const on = d.audioMode === m.key;
             return h(
               "div",
-              { class: "tap", style: { flex: "1", padding: "9px 10px", borderRadius: "9px", textAlign: "center", background: on ? "#faf9f5" : "transparent", border: "1px solid " + (on ? "#e6e3d8" : "transparent") }, onclick: () => { d.audioMode = m.key === "record" ? "record" : "system"; render(); } },
-              h("div", { style: { fontSize: "13px", fontWeight: "500", color: on ? "#141413" : "#5e5d59" } }, m.name),
-              h("div", { style: { marginTop: "2px", fontSize: "10.5px", color: on ? "#5e5d59" : "#b0aea5" } }, m.note)
+              { class: "tap", style: { flex: "1", padding: "9px 10px", borderRadius: "9px", textAlign: "center", background: on ? "var(--bg-surface)" : "transparent", border: "1px solid " + (on ? "var(--border-3)" : "transparent") }, onclick: () => { d.audioMode = m.key === "record" ? "record" : "system"; render(); } },
+              h("div", { style: { fontSize: "13px", fontWeight: "500", color: on ? "var(--text-primary)" : "var(--text-secondary)" } }, m.name),
+              h("div", { style: { marginTop: "2px", fontSize: "10.5px", color: on ? "var(--text-secondary)" : "var(--text-faint)" } }, m.note)
             );
           })
         ),
         audioModePanel
       ),
 
-      h("div", { style: { padding: "20px 20px 0", fontSize: "12px", lineHeight: "1.7", color: "#b0aea5" } }, "Audio plays automatically when the card appears in review. Generated audio is read from the front of the card — record your own voice instead when pronunciation or intonation is the thing you want to practise."),
+      h("div", { style: { padding: "20px 20px 0", fontSize: "12px", lineHeight: "1.7", color: "var(--text-faint)" } }, "Audio plays automatically when the card appears in review. Generated audio is read from the front of the card — record your own voice instead when pronunciation or intonation is the thing you want to practise."),
 
       d.editingId
         ? h(
             "div",
             { style: { padding: "26px 20px 0" } },
-            h("div", { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", border: "1px solid #f0eee6", color: "#c96442", fontSize: "14px", fontWeight: "500" }, onclick: deleteCard }, "Delete card")
+            h("div", { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", border: "1px solid var(--border-1)", color: "var(--accent)", fontSize: "14px", fontWeight: "500" }, onclick: deleteCard }, "Delete card")
           )
         : null,
 
@@ -3517,14 +3543,14 @@
   }
 
   function chevronNode() {
-    return h("div", { style: { width: "7px", height: "7px", borderRight: "1.6px solid #b0aea5", borderBottom: "1.6px solid #b0aea5", transform: "rotate(-45deg)", flexShrink: "0" } });
+    return h("div", { style: { width: "7px", height: "7px", borderRight: "1.6px solid var(--text-faint)", borderBottom: "1.6px solid var(--text-faint)", transform: "rotate(-45deg)", flexShrink: "0" } });
   }
 
   function settingsRow(label, right, onclick) {
     return h(
       "div",
       { class: onclick ? "tap" : "", style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 16px", gap: "12px" }, onclick: onclick || null },
-      h("span", { style: { fontSize: "15.5px", color: "#141413", flexShrink: "0", whiteSpace: "nowrap" } }, label),
+      h("span", { style: { fontSize: "15.5px", color: "var(--text-primary)", flexShrink: "0", whiteSpace: "nowrap" } }, label),
       h("div", { style: { display: "flex", alignItems: "center", gap: "10px", minWidth: "0" } }, right)
     );
   }
@@ -3536,18 +3562,18 @@
   function settingsCard(...rows) {
     const withSeps = [];
     rows.forEach((r, i) => {
-      if (i) withSeps.push(h("div", { style: { height: "1px", background: "#f0eee6", marginLeft: "16px" } }));
+      if (i) withSeps.push(h("div", { style: { height: "1px", background: "var(--border-1)", marginLeft: "16px" } }));
       withSeps.push(r);
     });
-    return h("div", { style: { background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "16px", overflow: "hidden" } }, ...withSeps);
+    return h("div", { style: { background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "16px", overflow: "hidden" } }, ...withSeps);
   }
 
   function subScreenHeader(title, onBack) {
     return h(
       "div",
       { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
-      h("div", { class: "tap", style: { fontSize: "14px", color: "#5e5d59" }, onclick: onBack }, "Cancel"),
-      h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, title),
+      h("div", { class: "tap", style: { fontSize: "14px", color: "var(--text-secondary)" }, onclick: onBack }, "Cancel"),
+      h("div", { style: { fontSize: "13px", color: "var(--text-faint)" } }, title),
       h("div", { style: { width: "42px" } })
     );
   }
@@ -3566,28 +3592,28 @@
           { style: { position: "absolute", inset: "0", background: "rgba(20,20,19,.34)", display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "12px", zIndex: "20" }, onclick: () => { ui.avatarSheetOpen = false; render(); } },
           h(
             "div",
-            { style: { background: "#faf9f5", borderRadius: "18px", overflow: "hidden", marginBottom: "10px" }, onclick: (e) => e.stopPropagation() },
-            h("div", { style: { padding: "13px 16px 12px", textAlign: "center", fontSize: "12.5px", color: "#87867f" } }, "Profile photo"),
-            h("div", { style: { height: "1px", background: "#f0eee6" } }),
+            { style: { background: "var(--bg-surface)", borderRadius: "18px", overflow: "hidden", marginBottom: "10px" }, onclick: (e) => e.stopPropagation() },
+            h("div", { style: { padding: "13px 16px 12px", textAlign: "center", fontSize: "12.5px", color: "var(--text-muted)" } }, "Profile photo"),
+            h("div", { style: { height: "1px", background: "var(--border-1)" } }),
             h("div", { class: "tap", style: { textAlign: "center", padding: "17px 16px", fontSize: "17px", fontWeight: "500" }, onclick: () => { ui.avatarSheetOpen = false; fileInput.click(); } }, "Change photo"),
             d.photo
-              ? h("div", {}, h("div", { style: { height: "1px", background: "#f0eee6" } }), h("div", { class: "tap", style: { textAlign: "center", padding: "17px 16px", fontSize: "17px", color: "#c96442" }, onclick: () => { d.photo = null; ui.avatarSheetOpen = false; render(); } }, "Remove photo"))
+              ? h("div", {}, h("div", { style: { height: "1px", background: "var(--border-1)" } }), h("div", { class: "tap", style: { textAlign: "center", padding: "17px 16px", fontSize: "17px", color: "var(--accent)" }, onclick: () => { d.photo = null; ui.avatarSheetOpen = false; render(); } }, "Remove photo"))
               : null
           ),
-          h("div", { class: "tap", style: { background: "#faf9f5", borderRadius: "18px", padding: "17px 16px", textAlign: "center", fontSize: "17px", fontWeight: "500" } }, "Cancel")
+          h("div", { class: "tap", style: { background: "var(--bg-surface)", borderRadius: "18px", padding: "17px 16px", textAlign: "center", fontSize: "17px", fontWeight: "500" } }, "Cancel")
         )
       : null;
 
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", position: "relative" } },
 
       h(
         "div",
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 0" } },
-        h("div", { class: "tap", style: { fontSize: "14px", color: "#5e5d59" }, onclick: cancelProfile }, "Cancel"),
-        h("div", { style: { fontSize: "13px", color: "#b0aea5" } }, "Your profile"),
-        h("div", { class: "tap", style: { fontSize: "14px", fontWeight: "500", color: "#c96442" }, onclick: saveProfile }, "Save")
+        h("div", { class: "tap", style: { fontSize: "14px", color: "var(--text-secondary)" }, onclick: cancelProfile }, "Cancel"),
+        h("div", { style: { fontSize: "13px", color: "var(--text-faint)" } }, "Your profile"),
+        h("div", { class: "tap", style: { fontSize: "14px", fontWeight: "500", color: "var(--accent)" }, onclick: saveProfile }, "Save")
       ),
 
       h(
@@ -3603,13 +3629,13 @@
             avatarNode(d, 96),
             h(
               "div",
-              { style: { position: "absolute", right: "-2px", bottom: "-2px", width: "30px", height: "30px", borderRadius: "9999px", background: "#141413", border: "2.5px solid #f5f4ed", display: "flex", alignItems: "center", justifyContent: "center" } },
-              icon('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.2"/>', 14, "#f5f4ed")
+              { style: { position: "absolute", right: "-2px", bottom: "-2px", width: "30px", height: "30px", borderRadius: "9999px", background: "var(--surface-invert-bg)", border: "2.5px solid var(--bg-page)", display: "flex", alignItems: "center", justifyContent: "center" } },
+              icon('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.2"/>', 14, "var(--surface-invert-text)")
             )
           ),
           h("input", {
             "data-field": "profileUsername", value: d.username, placeholder: "Your username",
-            style: { width: "220px", border: "none", outline: "none", background: "transparent", textAlign: "center", fontFamily: "var(--serif)", fontSize: "28px", fontWeight: "500", color: "#141413", padding: "2px 8px 7px", borderBottom: "1.5px dashed #d1cfc5" },
+            style: { width: "220px", border: "none", outline: "none", background: "transparent", textAlign: "center", fontFamily: "var(--serif)", fontSize: "28px", fontWeight: "500", color: "var(--text-primary)", padding: "2px 8px 7px", borderBottom: "1.5px dashed var(--text-faintest)" },
             oninput: (e) => { d.username = e.target.value; },
             onblur: flushRender,
           }),
@@ -3620,17 +3646,33 @@
           settingsRow(
             "Membership",
             [
-              h("span", { style: { flexShrink: "0", fontSize: "13px", fontWeight: "500", color: "#c96442", background: "#faf3f0", border: "1px solid #f0e2dc", borderRadius: "12px", padding: "3px 10px" } }, "Free plan"),
+              h("span", { style: { flexShrink: "0", fontSize: "13px", fontWeight: "500", color: "var(--accent)", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: "12px", padding: "3px 10px" } }, "Free plan"),
               chevronNode(),
             ],
             () => go("membership")
           ),
           settingsRow("Change password", chevronNode(), () => go("changePassword")),
+          settingsRow(
+            "Appearance",
+            h(
+              "div",
+              { style: { display: "flex", gap: "4px", background: "var(--bg-tint)", padding: "3px", borderRadius: "9999px" } },
+              ...[["light", "Light"], ["dark", "Dark"], ["system", "Auto"]].map(([key, label]) => {
+                const on = data.theme === key;
+                return h(
+                  "div",
+                  { class: "tap", style: { padding: "5px 11px", borderRadius: "9999px", fontSize: "12px", fontWeight: on ? "600" : "400", background: on ? "var(--surface-invert-bg)" : "transparent", color: on ? "var(--surface-invert-text)" : "var(--text-secondary)" }, onclick: () => setTheme(key) },
+                  label
+                );
+              })
+            ),
+            null
+          ),
           settingsRow("Q&A", chevronNode(), openSupportPage),
           settingsRow(
             "Contact us",
             [
-              ui.emailCopiedFlash ? h("span", { style: { fontSize: "13.5px", color: "#3a9d5d" } }, "Copied ✓") : null,
+              ui.emailCopiedFlash ? h("span", { style: { fontSize: "13.5px", color: "var(--success)" } }, "Copied ✓") : null,
               chevronNode(),
             ],
             copySupportEmail
@@ -3638,11 +3680,11 @@
         ),
 
         settingsCard(
-          centeredRow("Log out", "#4d4c48", logOut),
-          centeredRow(ui.deletingAccount ? "Deleting account…" : "Delete account", ui.deletingAccount ? "#e0a89a" : "#c96442", ui.deletingAccount ? null : deleteAccount)
+          centeredRow("Log out", "var(--text-secondary)", logOut),
+          centeredRow(ui.deletingAccount ? "Deleting account…" : "Delete account", ui.deletingAccount ? "#e0a89a" : "var(--accent)", ui.deletingAccount ? null : deleteAccount)
         ),
 
-        h("div", { style: { marginTop: "auto", textAlign: "center", fontSize: "11.5px", color: "#b0aea5", letterSpacing: ".3px", padding: "20px 0" } }, "Japanese Sentence Card · v1.0")
+        h("div", { style: { marginTop: "auto", textAlign: "center", fontSize: "11.5px", color: "var(--text-faint)", letterSpacing: ".3px", padding: "20px 0" } }, "Japanese Sentence Card · v1.0")
       ),
 
       sheet
@@ -3652,30 +3694,30 @@
   function screenChangePassword() {
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
 
       subScreenHeader("Change password", () => go("profile")),
 
       h(
         "div",
         { style: { padding: "24px 20px 0" } },
-        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "#b0aea5" } }, "New password"),
+        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "New password"),
         h("input", {
           "data-field": "pwNew", type: "password", value: ui.pwDraft.password, placeholder: "New password",
-          style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" },
+          style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px", fontSize: "14px", color: "var(--text-primary)" },
           oninput: (e) => { ui.pwDraft.password = e.target.value; },
           onblur: flushRender,
         }),
         h("input", {
           "data-field": "pwConfirm", type: "password", value: ui.pwDraft.confirm, placeholder: "Confirm new password",
-          style: { marginTop: "8px", width: "100%", padding: "14px 16px", background: "#faf9f5", border: "1px solid #f0eee6", borderRadius: "14px", fontSize: "14px", color: "#141413" },
+          style: { marginTop: "8px", width: "100%", padding: "14px 16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px", fontSize: "14px", color: "var(--text-primary)" },
           oninput: (e) => { ui.pwDraft.confirm = e.target.value; },
           onblur: flushRender,
         }),
-        ui.pwDraft.error ? h("div", { style: { marginTop: "8px", fontSize: "12px", color: "#c96442" } }, ui.pwDraft.error) : null,
+        ui.pwDraft.error ? h("div", { style: { marginTop: "8px", fontSize: "12px", color: "var(--accent)" } }, ui.pwDraft.error) : null,
         h(
           "div",
-          { class: ui.pwDraft.password && !ui.pwDraft.busy ? "tap" : "", style: { marginTop: "10px", padding: "13px", borderRadius: "12px", textAlign: "center", background: ui.pwDraft.password && !ui.pwDraft.busy ? "#c96442" : "#f0eee6", color: ui.pwDraft.password && !ui.pwDraft.busy ? "#faf9f5" : "#141413", fontSize: "13.5px", fontWeight: "500" }, onclick: ui.pwDraft.password && !ui.pwDraft.busy ? changePassword : null },
+          { class: ui.pwDraft.password && !ui.pwDraft.busy ? "tap" : "", style: { marginTop: "10px", padding: "13px", borderRadius: "12px", textAlign: "center", background: ui.pwDraft.password && !ui.pwDraft.busy ? "var(--accent)" : "var(--bg-tint)", color: ui.pwDraft.password && !ui.pwDraft.busy ? "var(--text-on-accent)" : "var(--text-primary)", fontSize: "13.5px", fontWeight: "500" }, onclick: ui.pwDraft.password && !ui.pwDraft.busy ? changePassword : null },
           ui.pwDraft.busy ? "Updating…" : "Update password"
         )
       )
@@ -3685,16 +3727,16 @@
   function screenMembership() {
     return h(
       "div",
-      { style: { minHeight: "100%", background: "#f5f4ed", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
 
       subScreenHeader("Membership", () => go("profile")),
 
       h(
         "div",
         { style: { flex: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px", textAlign: "center", gap: "10px" } },
-        h("span", { style: { fontSize: "13px", fontWeight: "500", color: "#c96442", background: "#faf3f0", border: "1px solid #f0e2dc", borderRadius: "12px", padding: "4px 12px" } }, "Free plan"),
-        h("div", { style: { marginTop: "10px", fontFamily: "var(--serif)", fontSize: "20px", color: "#141413" } }, "More plans are coming soon."),
-        h("div", { style: { fontSize: "14px", lineHeight: "1.6", color: "#5e5d59" } }, "Everyone's on the Free plan for now — nothing to do here yet.")
+        h("span", { style: { fontSize: "13px", fontWeight: "500", color: "var(--accent)", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: "12px", padding: "4px 12px" } }, "Free plan"),
+        h("div", { style: { marginTop: "10px", fontFamily: "var(--serif)", fontSize: "20px", color: "var(--text-primary)" } }, "More plans are coming soon."),
+        h("div", { style: { fontSize: "14px", lineHeight: "1.6", color: "var(--text-secondary)" } }, "Everyone's on the Free plan for now — nothing to do here yet.")
       )
     );
   }

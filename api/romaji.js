@@ -30,18 +30,18 @@ function getKuroshiro() {
 async function readCache(hash) {
   try {
     const res = await fetch(
-      SUPABASE_URL + "/rest/v1/romaji_cache?id=eq." + hash + "&select=romaji",
+      SUPABASE_URL + "/rest/v1/romaji_cache?id=eq." + hash + "&select=romaji,kana",
       { headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY } }
     );
     if (!res.ok) return null;
     const rows = await res.json();
-    return rows[0] ? rows[0].romaji : null;
+    return rows[0] || null;
   } catch {
     return null;
   }
 }
 
-async function writeCache(hash, romaji) {
+async function writeCache(hash, romaji, kana) {
   try {
     await fetch(SUPABASE_URL + "/rest/v1/romaji_cache", {
       method: "POST",
@@ -51,7 +51,7 @@ async function writeCache(hash, romaji) {
         "Content-Type": "application/json",
         Prefer: "resolution=ignore-duplicates",
       },
-      body: JSON.stringify({ id: hash, romaji }),
+      body: JSON.stringify({ id: hash, romaji, kana }),
     });
   } catch {
     // Cache write is a nice-to-have — never fail the request over it.
@@ -79,13 +79,13 @@ module.exports = async (req, res) => {
   const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (!text) {
-    res.status(200).json({ romaji: "" });
+    res.status(200).json({ romaji: "", kana: "" });
     return;
   }
   if (!JAPANESE_RE.test(text)) {
     // Nothing to convert (English, gibberish, etc.) — let the client fall
     // back to a manually-entered romaji instead of guessing.
-    res.status(200).json({ romaji: "" });
+    res.status(200).json({ romaji: "", kana: "" });
     return;
   }
 
@@ -93,18 +93,23 @@ module.exports = async (req, res) => {
 
   const cached = await readCache(hash);
   if (cached !== null) {
-    res.status(200).json({ romaji: cached });
+    res.status(200).json({ romaji: cached.romaji, kana: cached.kana || "" });
     return;
   }
 
   try {
     const kuroshiro = await getKuroshiro();
     const romaji = await kuroshiro.convert(text, { to: "romaji", mode: "spaced", romajiSystem: "hepburn" });
+    // kana carries the same kuromoji-resolved reading as romaji, just in
+    // an unambiguous script — see speak() in app.js for why this exists:
+    // handing raw kanji to the device's own TTS lets it mispronounce
+    // multi-reading kanji that this conversion already disambiguates.
+    const kana = await kuroshiro.convert(text, { to: "hiragana", mode: "normal" });
     // Awaited, not fire-and-forget: a serverless function's execution
     // context can be torn down the instant the response is sent, which
     // would silently drop an un-awaited write.
-    await writeCache(hash, romaji);
-    res.status(200).json({ romaji });
+    await writeCache(hash, romaji, kana);
+    res.status(200).json({ romaji, kana });
   } catch (e) {
     res.status(500).json({ error: "conversion failed" });
   }

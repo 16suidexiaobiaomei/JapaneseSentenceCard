@@ -111,19 +111,22 @@
     return (stability / FSRS_FACTOR) * (Math.pow(retention, 1 / FSRS_DECAY) - 1);
   }
 
+  // 5th element is the kana reading (kuromoji-resolved, matching what
+  // /api/romaji would compute) — hardcoded here since these seed cards
+  // never pass through that endpoint themselves. See speak().
   const SEED_CARDS = [
-    ["昨日は泳ぎました。", "Kinō wa oyogimashita.", "I swam yesterday.", ["Past tense", "Daily life"]],
-    ["お会計をお願いします。", "Okaikei o onegai shimasu.", "Could I have the bill, please.", ["Restaurant", "Polite form"]],
-    ["電車は何時に出ますか。", "Densha wa nanji ni demasu ka.", "What time does the train leave?", ["Travel", "Questions"]],
-    ["ちょっと待ってください。", "Chotto matte kudasai.", "Just a moment, please.", ["Polite form", "Daily life"]],
-    ["明日、会議があります。", "Ashita, kaigi ga arimasu.", "I have a meeting tomorrow.", ["Work"]],
-    ["これ、いくらですか。", "Kore, ikura desu ka.", "How much is this?", ["Shopping", "Questions"]],
-    ["傘を忘れました。", "Kasa o wasuremashita.", "I forgot my umbrella.", ["Past tense", "Daily life"]],
-    ["日本語で話しましょう。", "Nihongo de hanashimashō.", "Let's speak in Japanese.", ["Daily life"]],
-    ["すみません、道に迷いました。", "Sumimasen, michi ni mayoimashita.", "Excuse me, I'm lost.", ["Travel", "Polite form"]],
-    ["少し高いと思います。", "Sukoshi takai to omoimasu.", "I think it's a bit expensive.", ["Shopping", "Opinions"]],
-    ["資料を送っておきました。", "Shiryō o okutte okimashita.", "I've sent the documents.", ["Work", "Past tense"]],
-    ["週末は何をしましたか。", "Shūmatsu wa nani o shimashita ka.", "What did you do on the weekend?", ["Questions", "Past tense"]],
+    ["昨日は泳ぎました。", "Kinō wa oyogimashita.", "I swam yesterday.", ["Past tense", "Daily life"], "きのうはおよぎました。"],
+    ["お会計をお願いします。", "Okaikei o onegai shimasu.", "Could I have the bill, please.", ["Restaurant", "Polite form"], "おかいけいをおねがいします。"],
+    ["電車は何時に出ますか。", "Densha wa nanji ni demasu ka.", "What time does the train leave?", ["Travel", "Questions"], "でんしゃはなんじにでますか。"],
+    ["ちょっと待ってください。", "Chotto matte kudasai.", "Just a moment, please.", ["Polite form", "Daily life"], "ちょっとまってください。"],
+    ["明日、会議があります。", "Ashita, kaigi ga arimasu.", "I have a meeting tomorrow.", ["Work"], "あした、かいぎがあります。"],
+    ["これ、いくらですか。", "Kore, ikura desu ka.", "How much is this?", ["Shopping", "Questions"], "これ、いくらですか。"],
+    ["傘を忘れました。", "Kasa o wasuremashita.", "I forgot my umbrella.", ["Past tense", "Daily life"], "かさをわすれました。"],
+    ["日本語で話しましょう。", "Nihongo de hanashimashō.", "Let's speak in Japanese.", ["Daily life"], "にほんごではなしましょう。"],
+    ["すみません、道に迷いました。", "Sumimasen, michi ni mayoimashita.", "Excuse me, I'm lost.", ["Travel", "Polite form"], "すみません、みちにまよいました。"],
+    ["少し高いと思います。", "Sukoshi takai to omoimasu.", "I think it's a bit expensive.", ["Shopping", "Opinions"], "すこしたかいとおもいます。"],
+    ["資料を送っておきました。", "Shiryō o okutte okimashita.", "I've sent the documents.", ["Work", "Past tense"], "しりょうをおくっておきました。"],
+    ["週末は何をしましたか。", "Shūmatsu wa nani o shimashita ka.", "What did you do on the weekend?", ["Questions", "Past tense"], "しゅうまつはなにをしましたか。"],
   ];
 
   // ---------------------------------------------------------------------
@@ -141,6 +144,7 @@
         romaji: c[1],
         back: c[2],
         tags: c[3],
+        kana: c[4],
         stability: null, // null until first reviewed — FSRS memory state
         difficulty: null,
         reps: 0,
@@ -479,6 +483,7 @@
       user_id: userId,
       front: card.front,
       romaji: card.romaji || "",
+      kana: card.kana || "",
       back: card.back,
       tags: card.tags,
       stability: card.stability,
@@ -497,6 +502,7 @@
       id: row.id,
       front: row.front,
       romaji: row.romaji || "",
+      kana: row.kana || "",
       back: row.back,
       tags: row.tags || [],
       stability: row.stability,
@@ -678,6 +684,7 @@
       data.userId = userId;
       saveData();
       render();
+      backfillMissingKana(); // not awaited — runs quietly in the background
     } finally {
       syncing = false;
     }
@@ -740,7 +747,9 @@
       const a = new Audio(card.audio.data);
       a.play().catch(() => {});
     } else {
-      speak(card.front);
+      // Speaking the kana reading (not raw front text) sidesteps the
+      // device voice's own kanji-reading guesses — see generateRomaji().
+      speak(card.kana || card.front);
     }
   }
 
@@ -1313,7 +1322,7 @@
 
   function blankDraft() {
     return {
-      editingId: null, front: "", romaji: "", back: "", tags: [], newTag: "",
+      editingId: null, front: "", romaji: "", kana: "", back: "", tags: [], newTag: "",
       audioMode: "system", recState: "idle", recSec: 0, recording: null,
       // Romaji auto-fill bookkeeping — see handleFrontBlur().
       // romajiAuto: current d.romaji was set by us and hasn't been hand-edited,
@@ -1331,6 +1340,7 @@
       editingId: card.id,
       front: card.front,
       romaji: card.romaji || "",
+      kana: card.kana || "",
       back: card.back,
       tags: card.tags.slice(),
       newTag: "",
@@ -1363,6 +1373,11 @@
 
   const JAPANESE_RE = /[぀-ヿ一-龯]/;
 
+  // Returns { romaji, kana } — kana is the same kuromoji-resolved
+  // reading as romaji, just in an unambiguous script. It's never shown
+  // to the user; speak() uses it instead of raw front text so the
+  // device's own TTS can't mispronounce a multi-reading kanji that
+  // this conversion already resolved correctly (see speak() below).
   async function generateRomaji(text) {
     try {
       const res = await fetch(API_BASE + "/api/romaji", {
@@ -1372,10 +1387,37 @@
       });
       if (!res.ok) return null;
       const data = await res.json();
-      return typeof data.romaji === "string" ? data.romaji : null;
+      if (typeof data.romaji !== "string") return null;
+      return { romaji: data.romaji, kana: typeof data.kana === "string" ? data.kana : "" };
     } catch (e) {
       console.warn("romaji generation failed (offline?)", e);
       return null;
+    }
+  }
+
+  // Cards created before kana existed (or added offline) never got one —
+  // catch them up quietly, a few at a time, whenever a sync completes.
+  // Sequential on purpose: this can run for a while on a large, older
+  // collection, and there's no rush — better than bursting many
+  // concurrent requests at the romaji endpoint.
+  let backfillingKana = false;
+  async function backfillMissingKana() {
+    if (backfillingKana) return;
+    const targets = data.cards.filter((c) => !c.kana && JAPANESE_RE.test(c.front));
+    if (!targets.length) return;
+    backfillingKana = true;
+    try {
+      for (const c of targets) {
+        if (!data.cards.includes(c)) continue; // deleted mid-backfill
+        const result = await generateRomaji(c.front);
+        if (!result || !result.kana) continue;
+        c.kana = result.kana;
+        c.updatedAt = Date.now();
+        saveData();
+        await pushCard(c);
+      }
+    } finally {
+      backfillingKana = false;
     }
   }
 
@@ -1391,19 +1433,23 @@
 
     d.romajiLoading = true;
     render();
-    const romaji = await generateRomaji(front);
+    const result = await generateRomaji(front);
     d.romajiLoading = false;
 
     // The user may have changed the front text again while we were
     // waiting — a stale result for old text shouldn't land anywhere.
     if (d.front.trim() !== front) { render(); return; }
-    if (romaji === null) { render(); return; }
+    if (result === null) { render(); return; }
+
+    // Unlike romaji, kana is never shown or hand-edited — always take
+    // the fresh conversion for the current front text.
+    d.kana = result.kana;
 
     if (d.romajiAuto) {
-      d.romaji = romaji;
+      d.romaji = result.romaji;
       d.romajiSuggestion = null;
-    } else if (romaji !== d.romaji) {
-      d.romajiSuggestion = romaji;
+    } else if (result.romaji !== d.romaji) {
+      d.romajiSuggestion = result.romaji;
     }
     render();
   }
@@ -1440,6 +1486,7 @@
 
     const front = d.front.trim();
     const romaji = d.romaji.trim();
+    const kana = d.kana || "";
     const tags = d.tags.length ? d.tags.slice() : [UNTAGGED_TAG];
     const audio = d.audioMode === "system"
       ? { type: "system" }
@@ -1453,6 +1500,7 @@
       if (card) {
         card.front = front;
         card.romaji = romaji;
+        card.kana = kana;
         card.back = d.back.trim();
         card.tags = tags;
         card.audio = audio;
@@ -1464,6 +1512,7 @@
         id: "c-" + Date.now(),
         front,
         romaji,
+        kana,
         back: d.back.trim(),
         tags: tags,
         stability: null,
@@ -3323,7 +3372,7 @@
             { style: { display: "flex", alignItems: "center", gap: "15px" } },
             h(
               "div",
-              { class: "tap", style: { width: "52px", height: "52px", borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0", background: d.front.trim() ? "#f5f4ed" : "#f0eee6" }, onclick: () => d.front.trim() && speak(d.front) },
+              { class: "tap", style: { width: "52px", height: "52px", borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0", background: d.front.trim() ? "#f5f4ed" : "#f0eee6" }, onclick: () => d.front.trim() && speak(d.kana || d.front) },
               icon('<path d="M8 5l11 7-11 7z"/>', 19, "#c96442")
             ),
             h(

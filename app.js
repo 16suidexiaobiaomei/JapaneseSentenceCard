@@ -3361,7 +3361,12 @@
   function screenAdd() {
     const d = ui.draft;
     const tags = allTags();
-    const canSave = d.front.trim() && d.back.trim();
+    // Waiting out romajiLoading closes a real race: tapping Save (or
+    // preview, below) the instant after typing could fire before the
+    // in-flight kana/romaji fetch resolves, saving/speaking with the
+    // not-yet-populated d.kana and silently falling back to raw front
+    // text — reproducing the exact mispronunciation this was meant to fix.
+    const canSave = d.front.trim() && d.back.trim() && !d.romajiLoading;
 
     const audioModePanel = d.audioMode === "system"
       ? h(
@@ -3372,13 +3377,13 @@
             { style: { display: "flex", alignItems: "center", gap: "15px" } },
             h(
               "div",
-              { class: "tap", style: { width: "52px", height: "52px", borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0", background: d.front.trim() ? "#f5f4ed" : "#f0eee6" }, onclick: () => d.front.trim() && speak(d.kana || d.front) },
+              { class: "tap", style: { width: "52px", height: "52px", borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0", background: d.front.trim() && !d.romajiLoading ? "#f5f4ed" : "#f0eee6" }, onclick: () => d.front.trim() && !d.romajiLoading && speak(d.kana || d.front) },
               icon('<path d="M8 5l11 7-11 7z"/>', 19, "#c96442")
             ),
             h(
               "div",
               { style: { flex: "1", minWidth: "0" } },
-              h("div", { style: { fontSize: "13.5px", color: "#141413" } }, d.front.trim() ? "Tap to preview" : "Type a sentence to generate audio"),
+              h("div", { style: { fontSize: "13.5px", color: "#141413" } }, d.romajiLoading ? "Getting the reading ready…" : d.front.trim() ? "Tap to preview" : "Type a sentence to generate audio"),
               h("div", { style: { marginTop: "4px", fontSize: "11.5px", color: "#b0aea5" } }, "Spoken aloud automatically during review")
             )
           )

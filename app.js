@@ -271,7 +271,7 @@
     profileDraft: { username: "", photo: null },
     auth: blankAuthState(),
     pwDraft: blankPasswordState(),
-    activityRange: "all", // "all" | "30d" | "7d"
+    activityRange: "all", // "all" | "7d" | "today"
     session: null, // { queue: [ids], qi, flipped, tags, results }
     cardSavedFlash: false,
     cropModal: null, // { imgSrc, natW, natH, zoom, offsetX, offsetY } while cropping a new profile photo
@@ -393,11 +393,21 @@
     return best;
   }
 
-  // Activity range toggle: "all" | "30d" | "7d" — how many days back each
-  // covers for the three stat tiles (Cards/Reviewed/Active days). "all"
-  // means every day ever recorded for this account, not a rolling year —
-  // Infinity is handled specially in rangeStart() below.
-  const ACTIVITY_RANGE_DAYS = { all: Infinity, "30d": 29, "7d": 6 };
+  // Activity range toggle: "all" | "7d" | "today" — how many days back each
+  // covers for the range-accumulated stat tiles (New cards/Reviewed/Time
+  // in app). "all" means every day ever recorded for this account, not a
+  // rolling year — Infinity is handled specially in rangeStart() below.
+  const ACTIVITY_RANGE_DAYS = { all: Infinity, "7d": 6, today: 0 };
+
+  // Cards due at any point through the end of tomorrow — today's
+  // overdue/due-now backlog plus whatever newly becomes due tomorrow.
+  // Unaffected by the activity range toggle, same as the streak tiles.
+  function dueTomorrowCount() {
+    const end = new Date();
+    end.setDate(end.getDate() + 2);
+    end.setHours(0, 0, 0, 0);
+    return data.cards.filter((c) => c.dueAt < end.getTime()).length;
+  }
 
   function rangeStart(daysBack) {
     if (daysBack === Infinity) return new Date(0);
@@ -412,18 +422,6 @@
   function cardsReviewedInLastDays(daysBack) {
     const from = rangeStart(daysBack).getTime();
     return data.cards.filter((c) => c.lastReviewAt && c.lastReviewAt >= from).length;
-  }
-
-  function activeDaysInLastDays(daysBack) {
-    const from = rangeStart(daysBack);
-    const to = new Date();
-    let n = 0;
-    for (const [key, count] of Object.entries(data.reviewLog)) {
-      if (count <= 0) continue;
-      const d = new Date(key + "T00:00:00");
-      if (d >= from && d <= to) n++;
-    }
-    return n;
   }
 
   function cardsAddedInLastDays(daysBack) {
@@ -2269,15 +2267,10 @@
   }
 
   function screenHome() {
-    const tags = allTags();
     const due = dueCards(null);
     const rangeDays = ACTIVITY_RANGE_DAYS[ui.activityRange];
     const weeks = heatmapWeeks(HEATMAP_DAYS); // heatmap always shows ~6 months; only the tiles respect the range toggle
     const maxCount = Math.max(1, ...weeks.flat().filter(Boolean).map((c) => c.count));
-
-    const dueLine = due.length
-      ? due.length + " cards are due across " + tags.filter((t) => dueCards([t]).length).length + " tags. Sessions run " + SESSION_SIZE + " cards at a time."
-      : "Nothing due. Add a sentence you heard today.";
 
     return h(
       "div",
@@ -2303,8 +2296,7 @@
       h(
         "div",
         { style: { padding: "6px 20px 0" } },
-        h("div", { style: { fontFamily: "var(--serif)", fontSize: "30px", lineHeight: "1.15", color: "var(--text-primary)", letterSpacing: "-.2px" } }, data.profile.username && data.profile.username.trim() ? "Ready for today, " + data.profile.username.trim() + "." : "Ready for today."),
-        h("div", { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.6", color: "var(--text-secondary)" } }, dueLine)
+        h("div", { style: { fontFamily: "var(--serif)", fontSize: "30px", lineHeight: "1.15", color: "var(--text-primary)", letterSpacing: "-.2px" } }, data.profile.username && data.profile.username.trim() ? "Ready for today, " + data.profile.username.trim() + "." : "Ready for today.")
       ),
 
       h(
@@ -2359,7 +2351,7 @@
           h(
             "div",
             { style: { display: "flex", gap: "4px", background: "var(--bg-tint)", padding: "3px", borderRadius: "9999px" } },
-            ...[["all", "All"], ["30d", "30d"], ["7d", "7d"]].map(([key, label]) => {
+            ...[["all", "All"], ["7d", "7d"], ["today", "Today"]].map(([key, label]) => {
               const on = ui.activityRange === key;
               return h(
                 "div",
@@ -2373,11 +2365,11 @@
         h(
           "div",
           { style: { marginTop: "14px", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" } },
-          statTile("Cards", String(cardsAddedInLastDays(rangeDays))),
-          statTile("Reviewed", String(cardsReviewedInLastDays(rangeDays))),
-          statTile("Active days", String(activeDaysInLastDays(rangeDays))),
+          statTile("Due tomorrow", String(dueTomorrowCount())),
           statTile("Current streak", streakDays() + "d"),
           statTile("Longest streak", longestStreak() + "d"),
+          statTile("New cards", String(cardsAddedInLastDays(rangeDays))),
+          statTile("Reviewed", String(cardsReviewedInLastDays(rangeDays))),
           statTile("Time in app", formatDuration(activeMsInLastDays(rangeDays)))
         ),
 

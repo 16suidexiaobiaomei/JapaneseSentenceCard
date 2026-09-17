@@ -1450,12 +1450,19 @@
   let backfillingReadings = false;
   async function backfillMissingReadings() {
     if (backfillingReadings) return;
-    const targets = data.cards.filter((c) => (!c.kana || !c.furigana) && JAPANESE_RE.test(c.front));
-    if (!targets.length) return;
+    // IDs only, not the card objects themselves — a sync completing
+    // mid-backfill (e.g. the app being backgrounded and foregrounded
+    // again while this is running) replaces every untouched card with
+    // a freshly-built object from the server response, so a captured
+    // object reference would silently look "deleted" by the next
+    // iteration even though the card is very much still there.
+    const ids = data.cards.filter((c) => (!c.kana || !c.furigana) && JAPANESE_RE.test(c.front)).map((c) => c.id);
+    if (!ids.length) return;
     backfillingReadings = true;
     try {
-      for (const c of targets) {
-        if (!data.cards.includes(c)) continue; // deleted mid-backfill
+      for (const id of ids) {
+        const c = data.cards.find((x) => x.id === id);
+        if (!c || (c.kana && c.furigana)) continue; // deleted, or already caught up some other way
         const result = await generateRomaji(c.front);
         if (!result || !result.kana) continue;
         c.kana = result.kana;

@@ -60,7 +60,11 @@ async function writeCache(hash, romaji, kana, furigana) {
         apikey: SUPABASE_KEY,
         Authorization: "Bearer " + SUPABASE_KEY,
         "Content-Type": "application/json",
-        Prefer: "resolution=ignore-duplicates",
+        // merge- not ignore-duplicates: a row can already exist with
+        // empty kana/furigana (created before those columns existed),
+        // and a recomputation for it needs to actually overwrite that
+        // stale row instead of being silently dropped as a "duplicate".
+        Prefer: "resolution=merge-duplicates",
       },
       body: JSON.stringify({ id: hash, romaji, kana, furigana }),
     });
@@ -102,9 +106,15 @@ module.exports = async (req, res) => {
 
   const hash = crypto.createHash("sha256").update(text).digest("hex");
 
+  // A cache row from before kana/furigana existed has those columns
+  // defaulted to '' — treating that as a valid hit would return blank
+  // kana/furigana for that sentence forever, since a hit skips the
+  // conversion below entirely. Only trust the cache once all three are
+  // actually populated; otherwise fall through and (re)compute — see
+  // writeCache()'s merge-duplicates for why that safely overwrites it.
   const cached = await readCache(hash);
-  if (cached !== null) {
-    res.status(200).json({ romaji: cached.romaji, kana: cached.kana || "", furigana: cached.furigana || "" });
+  if (cached !== null && cached.kana && cached.furigana) {
+    res.status(200).json({ romaji: cached.romaji, kana: cached.kana, furigana: cached.furigana });
     return;
   }
 

@@ -13,6 +13,17 @@ const SUPABASE_KEY = "sb_publishable_oCqtHBphJuPnFgrK87K7PA_XwemlHSO";
 
 const JAPANESE_RE = /[぀-ヿ一-龯]/;
 
+// furigana is stored as HTML (<ruby>/<rt> markup) and rendered via
+// innerHTML on-device — including for cards downloaded from other
+// users' shared tags. Escaping the sentence before handing it to
+// kuroshiro means any stray <, >, & a sentence happens to contain
+// comes out as inert text in the ruby-wrapped output, never as live
+// markup — a normal Japanese sentence never contains those characters,
+// so this has no effect on real input.
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 // Kept at module scope so a "warm" invocation (the common case under
 // steady traffic) reuses the already-initialized tokenizer instead of
 // re-parsing the dictionary — only a cold start pays that cost.
@@ -30,7 +41,7 @@ function getKuroshiro() {
 async function readCache(hash) {
   try {
     const res = await fetch(
-      SUPABASE_URL + "/rest/v1/romaji_cache?id=eq." + hash + "&select=romaji,kana",
+      SUPABASE_URL + "/rest/v1/romaji_cache?id=eq." + hash + "&select=romaji,kana,furigana",
       { headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY } }
     );
     if (!res.ok) return null;
@@ -41,7 +52,7 @@ async function readCache(hash) {
   }
 }
 
-async function writeCache(hash, romaji, kana) {
+async function writeCache(hash, romaji, kana, furigana) {
   try {
     await fetch(SUPABASE_URL + "/rest/v1/romaji_cache", {
       method: "POST",
@@ -51,7 +62,7 @@ async function writeCache(hash, romaji, kana) {
         "Content-Type": "application/json",
         Prefer: "resolution=ignore-duplicates",
       },
-      body: JSON.stringify({ id: hash, romaji, kana }),
+      body: JSON.stringify({ id: hash, romaji, kana, furigana }),
     });
   } catch {
     // Cache write is a nice-to-have — never fail the request over it.
@@ -79,13 +90,13 @@ module.exports = async (req, res) => {
   const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (!text) {
-    res.status(200).json({ romaji: "", kana: "" });
+    res.status(200).json({ romaji: "", kana: "", furigana: "" });
     return;
   }
   if (!JAPANESE_RE.test(text)) {
     // Nothing to convert (English, gibberish, etc.) — let the client fall
     // back to a manually-entered romaji instead of guessing.
-    res.status(200).json({ romaji: "", kana: "" });
+    res.status(200).json({ romaji: "", kana: "", furigana: "" });
     return;
   }
 
@@ -93,7 +104,7 @@ module.exports = async (req, res) => {
 
   const cached = await readCache(hash);
   if (cached !== null) {
-    res.status(200).json({ romaji: cached.romaji, kana: cached.kana || "" });
+    res.status(200).json({ romaji: cached.romaji, kana: cached.kana || "", furigana: cached.furigana || "" });
     return;
   }
 
@@ -105,11 +116,16 @@ module.exports = async (req, res) => {
     // handing raw kanji to the device's own TTS lets it mispronounce
     // multi-reading kanji that this conversion already disambiguates.
     const kana = await kuroshiro.convert(text, { to: "hiragana", mode: "normal" });
+    // Ruby-annotated HTML shown above the sentence on the back of a
+    // review card. Converted from the escaped text (see escapeHtml)
+    // so a malicious sentence in a downloaded shared tag can't inject
+    // markup into another user's WebView.
+    const furigana = await kuroshiro.convert(escapeHtml(text), { to: "hiragana", mode: "furigana" });
     // Awaited, not fire-and-forget: a serverless function's execution
     // context can be torn down the instant the response is sent, which
     // would silently drop an un-awaited write.
-    await writeCache(hash, romaji, kana);
-    res.status(200).json({ romaji, kana });
+    await writeCache(hash, romaji, kana, furigana);
+    res.status(200).json({ romaji, kana, furigana });
   } catch (e) {
     res.status(500).json({ error: "conversion failed" });
   }

@@ -102,6 +102,11 @@ textarea:focus, input:focus { outline: none; border-color: var(--focus) !importa
 
 ::placeholder { color: var(--text-faint); }
 
+/* furigana (see furiganaNode() in app.js) — <rp> is only a fallback for
+   browsers without ruby support, which WKWebView isn't. */
+rp { display: none; }
+rt { font-size: .55em; }
+
 #app {
   height: 100dvh;
   display: flex;

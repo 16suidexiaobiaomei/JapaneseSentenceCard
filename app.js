@@ -115,18 +115,18 @@
   // /api/romaji would compute) — hardcoded here since these seed cards
   // never pass through that endpoint themselves. See speak().
   const SEED_CARDS = [
-    ["昨日は泳ぎました。", "Kinō wa oyogimashita.", "I swam yesterday.", ["Past tense", "Daily life"], "きのうはおよぎました。", "<ruby>昨日<rp>(</rp><rt>きのう</rt><rp>)</rp></ruby>は<ruby>泳<rp>(</rp><rt>およ</rt><rp>)</rp></ruby>ぎました。"],
-    ["お会計をお願いします。", "Okaikei o onegai shimasu.", "Could I have the bill, please.", ["Restaurant", "Polite form"], "おかいけいをおねがいします。", "お<ruby>会計<rp>(</rp><rt>かいけい</rt><rp>)</rp></ruby>をお<ruby>願<rp>(</rp><rt>ねが</rt><rp>)</rp></ruby>いします。"],
-    ["電車は何時に出ますか。", "Densha wa nanji ni demasu ka.", "What time does the train leave?", ["Travel", "Questions"], "でんしゃはなんじにでますか。", "<ruby>電車<rp>(</rp><rt>でんしゃ</rt><rp>)</rp></ruby>は<ruby>何<rp>(</rp><rt>なん</rt><rp>)</rp></ruby><ruby>時<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>に<ruby>出<rp>(</rp><rt>で</rt><rp>)</rp></ruby>ますか。"],
-    ["ちょっと待ってください。", "Chotto matte kudasai.", "Just a moment, please.", ["Polite form", "Daily life"], "ちょっとまってください。", "ちょっと<ruby>待<rp>(</rp><rt>ま</rt><rp>)</rp></ruby>ってください。"],
+    ["昨日は泳ぎました。", "Kinō wa oyogimashita.", "I swam yesterday.", ["Daily life"], "きのうはおよぎました。", "<ruby>昨日<rp>(</rp><rt>きのう</rt><rp>)</rp></ruby>は<ruby>泳<rp>(</rp><rt>およ</rt><rp>)</rp></ruby>ぎました。"],
+    ["お会計をお願いします。", "Okaikei o onegai shimasu.", "Could I have the bill, please.", ["Travel"], "おかいけいをおねがいします。", "お<ruby>会計<rp>(</rp><rt>かいけい</rt><rp>)</rp></ruby>をお<ruby>願<rp>(</rp><rt>ねが</rt><rp>)</rp></ruby>いします。"],
+    ["電車は何時に出ますか。", "Densha wa nanji ni demasu ka.", "What time does the train leave?", ["Travel"], "でんしゃはなんじにでますか。", "<ruby>電車<rp>(</rp><rt>でんしゃ</rt><rp>)</rp></ruby>は<ruby>何<rp>(</rp><rt>なん</rt><rp>)</rp></ruby><ruby>時<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>に<ruby>出<rp>(</rp><rt>で</rt><rp>)</rp></ruby>ますか。"],
+    ["ちょっと待ってください。", "Chotto matte kudasai.", "Just a moment, please.", ["Daily life"], "ちょっとまってください。", "ちょっと<ruby>待<rp>(</rp><rt>ま</rt><rp>)</rp></ruby>ってください。"],
     ["明日、会議があります。", "Ashita, kaigi ga arimasu.", "I have a meeting tomorrow.", ["Work"], "あした、かいぎがあります。", "<ruby>明日<rp>(</rp><rt>あした</rt><rp>)</rp></ruby>、<ruby>会議<rp>(</rp><rt>かいぎ</rt><rp>)</rp></ruby>があります。"],
-    ["これ、いくらですか。", "Kore, ikura desu ka.", "How much is this?", ["Shopping", "Questions"], "これ、いくらですか。", "これ、いくらですか。"],
-    ["傘を忘れました。", "Kasa o wasuremashita.", "I forgot my umbrella.", ["Past tense", "Daily life"], "かさをわすれました。", "<ruby>傘<rp>(</rp><rt>かさ</rt><rp>)</rp></ruby>を<ruby>忘<rp>(</rp><rt>わす</rt><rp>)</rp></ruby>れました。"],
+    ["これ、いくらですか。", "Kore, ikura desu ka.", "How much is this?", ["Travel"], "これ、いくらですか。", "これ、いくらですか。"],
+    ["傘を忘れました。", "Kasa o wasuremashita.", "I forgot my umbrella.", ["Daily life"], "かさをわすれました。", "<ruby>傘<rp>(</rp><rt>かさ</rt><rp>)</rp></ruby>を<ruby>忘<rp>(</rp><rt>わす</rt><rp>)</rp></ruby>れました。"],
     ["日本語で話しましょう。", "Nihongo de hanashimashō.", "Let's speak in Japanese.", ["Daily life"], "にほんごではなしましょう。", "<ruby>日本語<rp>(</rp><rt>にほんご</rt><rp>)</rp></ruby>で<ruby>話<rp>(</rp><rt>はな</rt><rp>)</rp></ruby>しましょう。"],
-    ["すみません、道に迷いました。", "Sumimasen, michi ni mayoimashita.", "Excuse me, I'm lost.", ["Travel", "Polite form"], "すみません、みちにまよいました。", "すみません、<ruby>道<rp>(</rp><rt>みち</rt><rp>)</rp></ruby>に<ruby>迷<rp>(</rp><rt>まよ</rt><rp>)</rp></ruby>いました。"],
-    ["少し高いと思います。", "Sukoshi takai to omoimasu.", "I think it's a bit expensive.", ["Shopping", "Opinions"], "すこしたかいとおもいます。", "<ruby>少<rp>(</rp><rt>すこ</rt><rp>)</rp></ruby>し<ruby>高<rp>(</rp><rt>たか</rt><rp>)</rp></ruby>いと<ruby>思<rp>(</rp><rt>おも</rt><rp>)</rp></ruby>います。"],
-    ["資料を送っておきました。", "Shiryō o okutte okimashita.", "I've sent the documents.", ["Work", "Past tense"], "しりょうをおくっておきました。", "<ruby>資料<rp>(</rp><rt>しりょう</rt><rp>)</rp></ruby>を<ruby>送<rp>(</rp><rt>おく</rt><rp>)</rp></ruby>っておきました。"],
-    ["週末は何をしましたか。", "Shūmatsu wa nani o shimashita ka.", "What did you do on the weekend?", ["Questions", "Past tense"], "しゅうまつはなにをしましたか。", "<ruby>週末<rp>(</rp><rt>しゅうまつ</rt><rp>)</rp></ruby>は<ruby>何<rp>(</rp><rt>なに</rt><rp>)</rp></ruby>をしましたか。"],
+    ["すみません、道に迷いました。", "Sumimasen, michi ni mayoimashita.", "Excuse me, I'm lost.", ["Travel"], "すみません、みちにまよいました。", "すみません、<ruby>道<rp>(</rp><rt>みち</rt><rp>)</rp></ruby>に<ruby>迷<rp>(</rp><rt>まよ</rt><rp>)</rp></ruby>いました。"],
+    ["少し高いと思います。", "Sukoshi takai to omoimasu.", "I think it's a bit expensive.", ["Travel"], "すこしたかいとおもいます。", "<ruby>少<rp>(</rp><rt>すこ</rt><rp>)</rp></ruby>し<ruby>高<rp>(</rp><rt>たか</rt><rp>)</rp></ruby>いと<ruby>思<rp>(</rp><rt>おも</rt><rp>)</rp></ruby>います。"],
+    ["資料を送っておきました。", "Shiryō o okutte okimashita.", "I've sent the documents.", ["Work"], "しりょうをおくっておきました。", "<ruby>資料<rp>(</rp><rt>しりょう</rt><rp>)</rp></ruby>を<ruby>送<rp>(</rp><rt>おく</rt><rp>)</rp></ruby>っておきました。"],
+    ["週末は何をしましたか。", "Shūmatsu wa nani o shimashita ka.", "What did you do on the weekend?", ["Daily life"], "しゅうまつはなにをしましたか。", "<ruby>週末<rp>(</rp><rt>しゅうまつ</rt><rp>)</rp></ruby>は<ruby>何<rp>(</rp><rt>なに</rt><rp>)</rp></ruby>をしましたか。"],
   ];
 
   // ---------------------------------------------------------------------
@@ -158,7 +158,10 @@
       })),
       reviewLog: {}, // "YYYY-MM-DD" -> count
       activeMsLog: {}, // "YYYY-MM-DD" -> ms active that day, for the 7d/30d "Time in app" tile
-      profile: { username: "", photo: null },
+      // plan is server-authoritative (set by the RevenueCat webhook, not
+      // this client) — the "free" default here is just a safe placeholder
+      // until the first sync pulls the real value down.
+      profile: { username: "", photo: null, plan: "free", showRomajiOnFront: false, showFuriganaOnFront: false },
       totalActiveMs: 0,
       theme: "system", // "light" | "dark" | "system" — device-local, not synced (see applyTheme())
     };
@@ -177,6 +180,9 @@
         parsed.profile.username = parsed.profile.name;
       }
       delete parsed.profile.name;
+      if (parsed.profile.plan !== "premium") parsed.profile.plan = "free";
+      if (typeof parsed.profile.showRomajiOnFront !== "boolean") parsed.profile.showRomajiOnFront = false;
+      if (typeof parsed.profile.showFuriganaOnFront !== "boolean") parsed.profile.showFuriganaOnFront = false;
       if (typeof parsed.totalActiveMs !== "number") parsed.totalActiveMs = 0;
       if (parsed.theme !== "light" && parsed.theme !== "dark" && parsed.theme !== "system") parsed.theme = "system";
       if (typeof parsed.userId !== "string") parsed.userId = null;
@@ -327,6 +333,35 @@
   // Same as allTags(), but always includes "Untagged" even when no card
   // currently needs it — so it stays available to filter/review/edit by,
   // rather than only appearing after the fact once a card falls into it.
+  const FREE_TAG_LIMIT = 5;
+
+  // "Untagged" is an automatic fallback, not something the user chose
+  // to create, so it never counts toward the limit.
+  function realTagCount() {
+    return allTags().filter((t) => t !== UNTAGGED_TAG).length;
+  }
+
+  // null if creating this tag is fine; an upsell message otherwise.
+  // Mirrors the server-side check in enforce_free_tag_limit() (the
+  // real enforcement — this is just for a snappier, friendlier UI
+  // instead of surfacing a raw rejected-write error).
+  //
+  // pendingTags is whatever tags are already queued up in the current
+  // in-progress draft/bulk-tag sheet but not saved to any card yet —
+  // allTags() only sees already-saved cards, so without this a single
+  // new card could accumulate unlimited brand-new tags before ever
+  // being saved, each check seeing the same stale (too-low) count.
+  function tagLimitError(tagName, pendingTags) {
+    if (data.profile.plan === "premium") return null;
+    const known = new Set(allTags().filter((t) => t !== UNTAGGED_TAG));
+    (pendingTags || []).forEach((t) => { if (t !== UNTAGGED_TAG) known.add(t); });
+    if (known.has(tagName)) return null; // reusing an existing/already-queued tag is always fine
+    if (known.size >= FREE_TAG_LIMIT) {
+      return "Free accounts can use up to " + FREE_TAG_LIMIT + " tags. Upgrade to Premium for unlimited tags, downloading from Community, and advanced settings.";
+    }
+    return null;
+  }
+
   function browsableTags() {
     const s = allTags();
     return s.includes(UNTAGGED_TAG) ? s : s.concat(UNTAGGED_TAG);
@@ -595,13 +630,33 @@
     const session = await getSessionSafe();
     if (!session) return null;
     try {
-      const { error } = await sb.from("profiles").upsert({ id: session.user.id, username: data.profile.username || null, photo: data.profile.photo, total_active_ms: data.totalActiveMs });
+      const { error } = await sb.from("profiles").upsert({
+        id: session.user.id,
+        username: data.profile.username || null,
+        photo: data.profile.photo,
+        total_active_ms: data.totalActiveMs,
+        // plan is deliberately never sent — it's server-authoritative,
+        // set only by the RevenueCat webhook (see the migration).
+        show_romaji_on_front: data.profile.showRomajiOnFront,
+        show_furigana_on_front: data.profile.showFuriganaOnFront,
+      });
       if (error) { console.warn("pushProfile rejected", error); return error.message; }
       return null;
     } catch (e) {
       console.warn("pushProfile failed (offline?)", e);
       return null;
     }
+  }
+
+  // Premium-only — the toggles that call this are hidden/disabled for
+  // free accounts, but this guard is the real gate (defends against a
+  // stale render or a mid-session downgrade, not just trusting the UI).
+  function setAdvancedDisplay(key, value) {
+    if (data.profile.plan !== "premium") return;
+    data.profile[key] = value;
+    saveData();
+    render();
+    pushProfile();
   }
 
   async function pushReviewDay(day) {
@@ -640,7 +695,13 @@
       }
 
       if (remoteProfile) {
-        data.profile = { username: remoteProfile.username || "", photo: remoteProfile.photo || null };
+        data.profile = {
+          username: remoteProfile.username || "",
+          photo: remoteProfile.photo || null,
+          plan: remoteProfile.plan === "premium" ? "premium" : "free",
+          showRomajiOnFront: !!remoteProfile.show_romaji_on_front,
+          showFuriganaOnFront: !!remoteProfile.show_furigana_on_front,
+        };
         // "Time in app" is tracked per-device, so two devices naturally
         // drift apart — converge both to whichever has accumulated more,
         // same idea as the review-log merge below. Not a true sum across
@@ -1038,7 +1099,7 @@
 
   function openBulkTagSheet() {
     if (!ui.selectedIds.length) return;
-    ui.bulkTagSheet = { query: "", checked: [] };
+    ui.bulkTagSheet = { query: "", checked: [], tagError: "" };
     render();
   }
 
@@ -1057,8 +1118,12 @@
     const s = ui.bulkTagSheet;
     const t = s.query.trim();
     if (!t) return;
-    if (!s.checked.includes(t)) s.checked = s.checked.concat(t);
+    if (s.checked.includes(t)) { s.query = ""; render(); return; }
+    const err = tagLimitError(t, s.checked);
+    if (err) { s.tagError = err; render(); return; }
+    s.checked = s.checked.concat(t);
     s.query = "";
+    s.tagError = "";
     render();
   }
 
@@ -1196,6 +1261,14 @@
   // up front and just writes straight into it, so a silent collision
   // would quietly merge someone else's deck into an unrelated tag.
   function startDownloadFlow(row) {
+    // download_shared_tag() enforces this too — this is just a
+    // friendlier, immediate upsell instead of making them fill out the
+    // whole sheet first only to hit a rejected-request error.
+    if (data.profile.plan !== "premium") {
+      alert("Downloading shared tags is a Premium feature. Upgrade to Premium to add tags from the community.");
+      go("membership");
+      return;
+    }
     const collision = browsableTags().includes(row.name);
     ui.downloadDraft = { row, name: collision ? row.name + " (" + row.owner_display_name + ")" : row.name, error: "", busy: false };
     render();
@@ -1354,15 +1427,20 @@
   }
 
   function addNewTag() {
-    const t = ui.draft.newTag.trim();
-    if (t && !ui.draft.tags.includes(t)) ui.draft.tags = ui.draft.tags.concat(t);
-    ui.draft.newTag = "";
+    const d = ui.draft;
+    const t = d.newTag.trim();
+    if (!t || d.tags.includes(t)) { d.newTag = ""; render(); return; }
+    const err = tagLimitError(t, d.tags);
+    if (err) { d.tagError = err; render(); return; }
+    d.tags = d.tags.concat(t);
+    d.newTag = "";
+    d.tagError = "";
     render();
   }
 
   function blankDraft() {
     return {
-      editingId: null, front: "", romaji: "", kana: "", furigana: "", back: "", tags: [], newTag: "",
+      editingId: null, front: "", romaji: "", kana: "", furigana: "", back: "", tags: [], newTag: "", tagError: "",
       audioMode: "system", recState: "idle", recSec: 0, recording: null,
       // Romaji auto-fill bookkeeping — see handleFrontBlur().
       // romajiAuto: current d.romaji was set by us and hasn't been hand-edited,
@@ -1385,6 +1463,7 @@
       back: card.back,
       tags: card.tags.slice(),
       newTag: "",
+      tagError: "",
       audioMode: isVoice ? "record" : "system",
       recState: isVoice ? "done" : "idle",
       recSec: 0,
@@ -2442,8 +2521,17 @@
       !s.flipped
         ? h(
             "div",
-            { class: "anim-in", style: { flex: "1", display: "flex", flexDirection: "column", justifyContent: "center" } },
-            h("div", { style: { fontFamily: "var(--jp)", fontSize: "29px", lineHeight: "1.5", color: "#141413" } }, c.front)
+            { class: "anim-in", style: { flex: "1", display: "flex", flexDirection: "column", justifyContent: "center", gap: "10px" } },
+            // Advanced settings (Premium-only) — pure Japanese is the
+            // default for everyone; these only ever ADD support, never
+            // take it away, and fall back to plain automatically for a
+            // free account regardless of what's stored in the toggle.
+            data.profile.plan === "premium" && data.profile.showFuriganaOnFront
+              ? furiganaNode(c, { fontFamily: "var(--jp)", fontSize: "29px", lineHeight: "2.1", color: "#141413" })
+              : h("div", { style: { fontFamily: "var(--jp)", fontSize: "29px", lineHeight: "1.5", color: "#141413" } }, c.front),
+            data.profile.plan === "premium" && data.profile.showRomajiOnFront && c.romaji
+              ? h("div", { style: { fontSize: "13.5px", color: "#5e5d59", letterSpacing: ".2px" } }, c.romaji)
+              : null
           )
         : h(
             "div",
@@ -2757,6 +2845,7 @@
         isNew
           ? h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "9px", color: "var(--accent)", fontSize: "14.5px", fontWeight: "500" }, onclick: createBulkTag }, icon('<path d="M12 5v14M5 12h14"/>', 17, "var(--accent)"), "Create “" + s.query.trim() + "”")
           : null,
+        s.tagError ? h("div", { style: { fontSize: "12.5px", lineHeight: "1.5", color: "var(--accent)" } }, s.tagError) : null,
         h(
           "div",
           { class: s.checked.length ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: s.checked.length ? "var(--surface-invert-bg)" : "var(--bg-tint)", color: s.checked.length ? "var(--surface-invert-text)" : "var(--text-faint)" }, onclick: s.checked.length ? applyBulkTag : null },
@@ -3550,7 +3639,8 @@
           { style: { marginTop: "10px", display: "flex", gap: "8px" } },
           h("input", { "data-field": "newTag", value: d.newTag, placeholder: "New tag", style: { flex: "1", padding: "11px 14px", background: "var(--bg-surface)", border: "1px dashed var(--text-faintest)", borderRadius: "9999px", fontSize: "13px", color: "var(--text-primary)" }, oninput: (e) => { d.newTag = e.target.value; }, onblur: flushRender, onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addNewTag(); } } }),
           h("div", { class: "tap", style: { padding: "11px 18px", borderRadius: "9999px", background: "var(--bg-tint)", color: "var(--text-primary)", fontSize: "13px" }, onclick: addNewTag }, "Add")
-        )
+        ),
+        d.tagError ? h("div", { style: { marginTop: "8px", fontSize: "12.5px", lineHeight: "1.5", color: "var(--accent)" } }, d.tagError) : null
       ),
 
       h(
@@ -3600,6 +3690,25 @@
       { class: onclick ? "tap" : "", style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 16px", gap: "12px" }, onclick: onclick || null },
       h("span", { style: { fontSize: "15.5px", color: "var(--text-primary)", flexShrink: "0", whiteSpace: "nowrap" } }, label),
       h("div", { style: { display: "flex", alignItems: "center", gap: "10px", minWidth: "0" } }, right)
+    );
+  }
+
+  // Same segmented-pill look as the Appearance row's Light/Dark/Auto
+  // control — used here for a plain on/off setting instead of a
+  // separate iOS-style switch, so the two don't look like different
+  // widgets for the same kind of choice.
+  function onOffPill(on, onChange) {
+    return h(
+      "div",
+      { style: { display: "flex", gap: "4px", background: "var(--bg-tint)", padding: "3px", borderRadius: "9999px" } },
+      ...[[false, "Off"], [true, "On"]].map(([value, label]) => {
+        const active = on === value;
+        return h(
+          "div",
+          { class: "tap", style: { padding: "5px 11px", borderRadius: "9999px", fontSize: "12px", fontWeight: active ? "600" : "400", background: active ? "var(--surface-invert-bg)" : "transparent", color: active ? "var(--surface-invert-text)" : "var(--text-secondary)" }, onclick: () => onChange(value) },
+          label
+        );
+      })
     );
   }
 
@@ -3694,7 +3803,9 @@
           settingsRow(
             "Membership",
             [
-              h("span", { style: { flexShrink: "0", fontSize: "13px", fontWeight: "500", color: "var(--accent)", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: "12px", padding: "3px 10px" } }, "Free plan"),
+              data.profile.plan === "premium"
+                ? h("span", { style: { flexShrink: "0", fontSize: "13px", fontWeight: "500", color: "var(--success)", background: "var(--bg-tint)", border: "1px solid var(--border-2b)", borderRadius: "12px", padding: "3px 10px" } }, "Premium")
+                : h("span", { style: { flexShrink: "0", fontSize: "13px", fontWeight: "500", color: "var(--accent)", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: "12px", padding: "3px 10px" } }, "Free plan"),
               chevronNode(),
             ],
             () => go("membership")
@@ -3715,6 +3826,20 @@
               })
             ),
             null
+          ),
+          settingsRow(
+            "Advanced settings",
+            data.profile.plan === "premium"
+              ? chevronNode()
+              : h("span", { style: { fontSize: "12px", color: "var(--text-faint)" } }, "Premium"),
+            () => {
+              if (data.profile.plan !== "premium") {
+                alert("Choosing what to show on the front of a review card is a Premium feature.");
+                go("membership");
+                return;
+              }
+              go("advancedSettings");
+            }
           ),
           settingsRow("Q&A", chevronNode(), openSupportPage),
           settingsRow(
@@ -3772,7 +3897,17 @@
     );
   }
 
+  function premiumBenefitRow(text) {
+    return h(
+      "div",
+      { style: { display: "flex", alignItems: "flex-start", gap: "10px", textAlign: "left" } },
+      icon('<path d="m5 13 4.5 4.5L19 7"/>', 15, "var(--success)", { style: "flex-shrink:0;margin-top:2px", "stroke-width": "3" }),
+      h("span", { style: { fontSize: "14.5px", lineHeight: "1.5", color: "var(--text-secondary)" } }, text)
+    );
+  }
+
   function screenMembership() {
+    const isPremium = data.profile.plan === "premium";
     return h(
       "div",
       { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
@@ -3781,10 +3916,56 @@
 
       h(
         "div",
-        { style: { flex: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px", textAlign: "center", gap: "10px" } },
-        h("span", { style: { fontSize: "13px", fontWeight: "500", color: "var(--accent)", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: "12px", padding: "4px 12px" } }, "Free plan"),
-        h("div", { style: { marginTop: "10px", fontFamily: "var(--serif)", fontSize: "20px", color: "var(--text-primary)" } }, "More plans are coming soon."),
-        h("div", { style: { fontSize: "14px", lineHeight: "1.6", color: "var(--text-secondary)" } }, "Everyone's on the Free plan for now — nothing to do here yet.")
+        { style: { flex: "1", display: "flex", flexDirection: "column", padding: "10px 24px 24px", gap: "22px" } },
+
+        h(
+          "div",
+          { style: { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "8px", padding: "8px 0" } },
+          isPremium
+            ? h("span", { style: { fontSize: "13px", fontWeight: "500", color: "var(--success)", background: "var(--bg-tint)", border: "1px solid var(--border-2b)", borderRadius: "12px", padding: "4px 12px" } }, "Premium")
+            : h("span", { style: { fontSize: "13px", fontWeight: "500", color: "var(--accent)", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: "12px", padding: "4px 12px" } }, "Free plan"),
+          h(
+            "div",
+            { style: { marginTop: "6px", fontFamily: "var(--serif)", fontSize: "20px", color: "var(--text-primary)" } },
+            isPremium ? "You're on Premium." : "Unlock unlimited tags and more."
+          )
+        ),
+
+        h(
+          "div",
+          { style: { display: "flex", flexDirection: "column", gap: "13px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "16px", padding: "18px" } },
+          premiumBenefitRow("Unlimited tags — free accounts are capped at " + FREE_TAG_LIMIT + "."),
+          premiumBenefitRow("Download shared tags from the Community."),
+          premiumBenefitRow("Advanced settings — choose whether romaji and furigana also show on the front of a review card.")
+        ),
+
+        isPremium
+          ? h("div", { style: { fontSize: "13px", lineHeight: "1.6", color: "var(--text-faint)", textAlign: "center" } }, "Manage your subscription through the App Store.")
+          : h("div", { style: { fontSize: "13px", lineHeight: "1.6", color: "var(--text-faint)", textAlign: "center" } }, "Upgrading from the app is coming soon.")
+      )
+    );
+  }
+
+  function screenAdvancedSettings() {
+    return h(
+      "div",
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+
+      subScreenHeader("Advanced settings", () => go("profile")),
+
+      h(
+        "div",
+        { style: { padding: "18px 20px 0" } },
+        h("div", { style: { fontSize: "13.5px", lineHeight: "1.6", color: "var(--text-secondary)" } }, "Romaji and furigana always show on the back of a review card. Turn either on here to also show it on the front — useful while you're still building up confidence reading a sentence cold.")
+      ),
+
+      h(
+        "div",
+        { style: { padding: "18px 20px 0" } },
+        settingsCard(
+          settingsRow("Romaji on front", onOffPill(data.profile.showRomajiOnFront, (v) => setAdvancedDisplay("showRomajiOnFront", v)), null),
+          settingsRow("Furigana on front", onOffPill(data.profile.showFuriganaOnFront, (v) => setAdvancedDisplay("showFuriganaOnFront", v)), null)
+        )
       )
     );
   }
@@ -3854,6 +4035,7 @@
       case "profile": content = screenProfile(); break;
       case "changePassword": content = screenChangePassword(); break;
       case "membership": content = screenMembership(); break;
+      case "advancedSettings": content = screenAdvancedSettings(); break;
       default: content = screenHome();
     }
 

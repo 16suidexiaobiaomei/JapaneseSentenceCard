@@ -1422,11 +1422,19 @@
   // below). furigana is pre-escaped, ready-to-render <ruby> HTML shown
   // above the sentence on the back of a review card (see furiganaNode()).
   async function generateRomaji(text) {
+    // A hung request here (dropped connection, a stalled cold start
+    // that never actually responds) would otherwise block forever —
+    // fatal for backfillMissingReadings(), which awaits this
+    // sequentially and would never reach its own finally block, leaving
+    // its "already running" flag stuck true for the rest of the session.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
     try {
       const res = await fetch(API_BASE + "/api/romaji", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
+        signal: controller.signal,
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -1437,8 +1445,10 @@
         furigana: typeof data.furigana === "string" ? data.furigana : "",
       };
     } catch (e) {
-      console.warn("romaji generation failed (offline?)", e);
+      console.warn("romaji generation failed (offline, or timed out)", e);
       return null;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

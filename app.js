@@ -1218,15 +1218,34 @@
   // Community: browse, tag detail, download
   // ---------------------------------------------------------------------
 
-  async function openCommunity() {
+  // Tapping the Community tab re-ran this full fetch every time, even
+  // seconds after the last visit — a short in-memory cache means normal
+  // back-and-forth navigation is instant, while a real action (sharing,
+  // downloading, unsharing) explicitly invalidates it below so that
+  // still shows up fresh right away.
+  let communityFeedCache = null;
+  let communityFeedCachedAt = 0;
+  const COMMUNITY_CACHE_MS = 90000;
+
+  async function openCommunity(forceRefresh) {
     go("community");
+    if (!forceRefresh && communityFeedCache && Date.now() - communityFeedCachedAt < COMMUNITY_CACHE_MS) {
+      ui.communityFeed = communityFeedCache;
+      render();
+      return;
+    }
     ui.communityLoading = true;
     render();
     const session = await getSessionSafe();
     if (!session) { ui.communityLoading = false; render(); return; }
     try {
-      const { data: feed } = await sb.from("shared_tags").select("*").eq("status", "active").order("download_count", { ascending: false });
+      // Ordered by download_count, so a bounded page still surfaces the
+      // most-relevant tags first as the community grows — this is a
+      // browse feed, not a full export of every tag ever shared.
+      const { data: feed } = await sb.from("shared_tags").select("*").eq("status", "active").order("download_count", { ascending: false }).limit(60);
       ui.communityFeed = feed || [];
+      communityFeedCache = ui.communityFeed;
+      communityFeedCachedAt = Date.now();
     } catch (e) {
       console.warn("loading Community failed (offline?)", e);
     }
@@ -1310,6 +1329,7 @@
     d.busy = false;
     if (error) { d.error = error.message; render(); return; }
     ui.downloadDraft = null;
+    communityFeedCachedAt = 0; // download_count just changed
     render();
     await syncNow(); // pulls the newly-copied cards down into data.cards
     alert(count ? 'Added "' + name + '" — ' + count + " cards." : 'You already had this one — nothing new to add.');
@@ -1323,6 +1343,7 @@
     const { error } = await sb.from("shared_tags").update({ status: "unpublished" }).eq("id", row.id);
     if (error) { alert("Couldn't update sharing: " + error.message); return; }
     row.status = "unpublished";
+    communityFeedCachedAt = 0; // this tag should disappear from Community now
     render();
   }
 
@@ -1435,6 +1456,7 @@
     if (error) { d.error = error.message; render(); return; }
     const wasRepublish = !!d.republishId;
     ui.shareDraft = null;
+    communityFeedCachedAt = 0; // this tag should now show up in Community
     alert('"' + d.tagName + '" is ' + (wasRepublish ? "shared with the community again." : "now shared with the community."));
     openMyTags();
   }
@@ -2932,8 +2954,13 @@
     );
   }
 
-  function communityGridCard(row) {
-    const added = hasLocalCardsFrom(row.id);
+  // addedIds is a precomputed Set (see screenCommunity()) — checking
+  // hasLocalCardsFrom() per row here meant a full scan over every local
+  // card, for every tile, on every render of the whole screen (any
+  // keystroke in the search box, any filter tap), which got expensive
+  // fast on an account with a large collection.
+  function communityGridCard(row, addedIds) {
+    const added = addedIds.has(row.id);
     return h(
       "div",
       { class: "tap", style: { background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "16px", padding: "14px", display: "flex", flexDirection: "column", gap: "6px", minHeight: "118px" }, onclick: () => openTagDetail(row) },
@@ -2953,6 +2980,7 @@
     const isBrowsingDefault = !ui.communitySearch.trim() && ui.communityLangFilter === "Any";
     const hero = isBrowsingDefault && filtered.length ? filtered[0] : null;
     const gridItems = hero ? filtered.slice(1) : filtered;
+    const addedIds = new Set(data.cards.map((c) => c.sourceSharedTagId).filter(Boolean));
 
     return h(
       "div",
@@ -3028,7 +3056,7 @@
                     )
                   : null,
                 gridItems.length
-                  ? h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" } }, ...gridItems.map((row) => communityGridCard(row)))
+                  ? h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" } }, ...gridItems.map((row) => communityGridCard(row, addedIds)))
                   : null,
               ]
       ),

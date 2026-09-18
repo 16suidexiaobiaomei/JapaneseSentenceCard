@@ -8,6 +8,12 @@
   const STORAGE_KEY = "sentence-cards-v1";
   const SESSION_SIZE = 10;
   const AUTOPLAY_AUDIO = true;
+  // Review cards render at a large fixed font size with no scrolling, so
+  // a very long sentence would visibly overflow the card rather than
+  // wrap gracefully. English translations naturally run longer than the
+  // Japanese sentence they correspond to, hence the higher back limit.
+  const FRONT_MAX_LENGTH = 60;
+  const BACK_MAX_LENGTH = 100;
 
   // ---------------------------------------------------------------------
   // Supabase (auth + cloud database). The publishable key is meant to be
@@ -161,7 +167,7 @@
       // plan is server-authoritative (set by the RevenueCat webhook, not
       // this client) — the "free" default here is just a safe placeholder
       // until the first sync pulls the real value down.
-      profile: { username: "", photo: null, plan: "free", showRomajiOnFront: false, showFuriganaOnFront: false },
+      profile: { username: "", photo: null, plan: "free", showRomajiOnFront: false, showFuriganaOnFront: false, showRomajiOnBack: true, showFuriganaOnBack: true },
       totalActiveMs: 0,
       theme: "system", // "light" | "dark" | "system" — device-local, not synced (see applyTheme())
     };
@@ -183,6 +189,8 @@
       if (parsed.profile.plan !== "premium") parsed.profile.plan = "free";
       if (typeof parsed.profile.showRomajiOnFront !== "boolean") parsed.profile.showRomajiOnFront = false;
       if (typeof parsed.profile.showFuriganaOnFront !== "boolean") parsed.profile.showFuriganaOnFront = false;
+      if (typeof parsed.profile.showRomajiOnBack !== "boolean") parsed.profile.showRomajiOnBack = true;
+      if (typeof parsed.profile.showFuriganaOnBack !== "boolean") parsed.profile.showFuriganaOnBack = true;
       if (typeof parsed.totalActiveMs !== "number") parsed.totalActiveMs = 0;
       if (parsed.theme !== "light" && parsed.theme !== "dark" && parsed.theme !== "system") parsed.theme = "system";
       if (typeof parsed.userId !== "string") parsed.userId = null;
@@ -370,7 +378,13 @@
   function streakDays() {
     const log = data.reviewLog;
     let d = new Date();
-    if (!(dateKey(d) in log)) d.setDate(d.getDate() - 1);
+    // A value check, not a key-existence check — syncNow() can create a
+    // count:0 row for today (it re-pushes a day whenever local
+    // active-time is ahead of the server, which is true just from
+    // having the app open, review or not), and `in` would treat that
+    // stored zero as "today already has data", skipping the fallback to
+    // yesterday and reporting 0 instead of the still-current streak.
+    if (!(log[dateKey(d)] > 0)) d.setDate(d.getDate() - 1);
     let count = 0;
     while (log[dateKey(d)] > 0) {
       count++;
@@ -637,6 +651,8 @@
         // set only by the RevenueCat webhook (see the migration).
         show_romaji_on_front: data.profile.showRomajiOnFront,
         show_furigana_on_front: data.profile.showFuriganaOnFront,
+        show_romaji_on_back: data.profile.showRomajiOnBack,
+        show_furigana_on_back: data.profile.showFuriganaOnBack,
       });
       if (error) { console.warn("pushProfile rejected", error); return error.message; }
       return null;
@@ -699,6 +715,11 @@
           plan: remoteProfile.plan === "premium" ? "premium" : "free",
           showRomajiOnFront: !!remoteProfile.show_romaji_on_front,
           showFuriganaOnFront: !!remoteProfile.show_furigana_on_front,
+          // Default true (not !!) — these default to shown, so a
+          // missing/undefined value (e.g. before this migration has
+          // been run) should read as "on", not "off".
+          showRomajiOnBack: remoteProfile.show_romaji_on_back !== false,
+          showFuriganaOnBack: remoteProfile.show_furigana_on_back !== false,
         };
         // "Time in app" is tracked per-device, so two devices naturally
         // drift apart — converge both to whichever has accumulated more,
@@ -1724,7 +1745,12 @@
   }
 
   async function saveProfile() {
-    data.profile = { username: ui.profileDraft.username.trim(), photo: ui.profileDraft.photo };
+    // Update in place — replacing the whole object would wipe out
+    // plan/showRomajiOnFront/etc (not part of profileDraft), which
+    // briefly made a Premium account render as Free until the next sync
+    // pulled the real profile back down.
+    data.profile.username = ui.profileDraft.username.trim();
+    data.profile.photo = ui.profileDraft.photo;
     saveData();
     go("home");
     const errorMessage = await pushProfile();
@@ -2531,8 +2557,14 @@
             h(
               "div",
               { style: { display: "flex", flexDirection: "column", gap: "7px", paddingBottom: "18px", borderBottom: "1px solid #f0eee6" } },
-              furiganaNode(c, { fontFamily: "var(--jp)", fontSize: "16px", lineHeight: "2.3", color: "#5e5d59" }),
-              c.romaji ? h("div", { style: { fontSize: "12.5px", color: "#87867f", letterSpacing: ".2px" } }, c.romaji) : null
+              // Shown by default for everyone — only a Premium account
+              // can turn either off, for a harder no-hints recall test.
+              (data.profile.plan !== "premium" || data.profile.showFuriganaOnBack)
+                ? furiganaNode(c, { fontFamily: "var(--jp)", fontSize: "16px", lineHeight: "2.3", color: "#5e5d59" })
+                : h("div", { style: { fontFamily: "var(--jp)", fontSize: "16px", lineHeight: "1.5", color: "#5e5d59" } }, c.front),
+              (data.profile.plan !== "premium" || data.profile.showRomajiOnBack) && c.romaji
+                ? h("div", { style: { fontSize: "12.5px", color: "#87867f", letterSpacing: ".2px" } }, c.romaji)
+                : null
             ),
             h("div", { style: { flex: "1", display: "flex", alignItems: "center" } }, h("div", { style: { fontFamily: "var(--serif)", fontSize: "26px", lineHeight: "1.35", color: "#141413" } }, c.back))
           ),
@@ -3579,8 +3611,13 @@
       h(
         "div",
         { style: { padding: "22px 20px 0" } },
-        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Front · sentence"),
-        h("textarea", { "data-field": "front", rows: "2", placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "var(--text-primary)" }, oninput: (e) => { d.front = e.target.value; }, onblur: handleFrontBlur }, d.front)
+        h(
+          "div",
+          { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+          h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Front · sentence"),
+          h("div", { style: { fontSize: "11px", color: d.front.length >= FRONT_MAX_LENGTH ? "var(--accent)" : "var(--text-faint)" } }, d.front.length + "/" + FRONT_MAX_LENGTH)
+        ),
+        h("textarea", { "data-field": "front", rows: "2", maxlength: String(FRONT_MAX_LENGTH), placeholder: "昨日は泳ぎました。", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px", fontFamily: "var(--jp)", fontSize: "19px", lineHeight: "1.5", color: "var(--text-primary)" }, oninput: (e) => { d.front = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: handleFrontBlur }, d.front)
       ),
 
       h(
@@ -3605,8 +3642,13 @@
       h(
         "div",
         { style: { padding: "20px 20px 0" } },
-        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Back · note"),
-        h("textarea", { "data-field": "back", rows: "2", placeholder: "I swam yesterday.", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "17px", lineHeight: "1.5", color: "var(--text-primary)" }, oninput: (e) => { d.back = e.target.value; }, onblur: flushRender }, d.back)
+        h(
+          "div",
+          { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+          h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Back · note"),
+          h("div", { style: { fontSize: "11px", color: d.back.length >= BACK_MAX_LENGTH ? "var(--accent)" : "var(--text-faint)" } }, d.back.length + "/" + BACK_MAX_LENGTH)
+        ),
+        h("textarea", { "data-field": "back", rows: "2", maxlength: String(BACK_MAX_LENGTH), placeholder: "I swam yesterday.", style: { marginTop: "10px", width: "100%", resize: "none", padding: "16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px", fontFamily: "var(--serif)", fontSize: "17px", lineHeight: "1.5", color: "var(--text-primary)" }, oninput: (e) => { d.back = e.target.value; if (!e.isComposing) scheduleRender(); }, onblur: flushRender }, d.back)
       ),
 
       h(
@@ -3928,7 +3970,7 @@
           { style: { display: "flex", flexDirection: "column", gap: "13px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "16px", padding: "18px" } },
           premiumBenefitRow("Unlimited tags — free accounts are capped at " + FREE_TAG_LIMIT + "."),
           premiumBenefitRow("Download shared tags from the Community."),
-          premiumBenefitRow("Advanced settings — choose whether romaji and furigana also show on the front of a review card.")
+          premiumBenefitRow("Advanced settings — customize whether romaji and furigana show on the front and back of a review card.")
         ),
 
         isPremium
@@ -3948,15 +3990,26 @@
       h(
         "div",
         { style: { padding: "18px 20px 0" } },
-        h("div", { style: { fontSize: "13.5px", lineHeight: "1.6", color: "var(--text-secondary)" } }, "Romaji and furigana always show on the back of a review card. Turn either on here to also show it on the front — useful while you're still building up confidence reading a sentence cold.")
+        h("div", { style: { fontSize: "13.5px", lineHeight: "1.6", color: "var(--text-secondary)" } }, "Customize what shows on your review cards.")
       ),
 
       h(
         "div",
         { style: { padding: "18px 20px 0" } },
+        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)", marginBottom: "10px" } }, "Front of card"),
         settingsCard(
           settingsRow("Romaji on front", onOffPill(data.profile.showRomajiOnFront, (v) => setAdvancedDisplay("showRomajiOnFront", v)), null),
           settingsRow("Furigana on front", onOffPill(data.profile.showFuriganaOnFront, (v) => setAdvancedDisplay("showFuriganaOnFront", v)), null)
+        )
+      ),
+
+      h(
+        "div",
+        { style: { padding: "18px 20px 0" } },
+        h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)", marginBottom: "10px" } }, "Back of card"),
+        settingsCard(
+          settingsRow("Romaji on back", onOffPill(data.profile.showRomajiOnBack, (v) => setAdvancedDisplay("showRomajiOnBack", v)), null),
+          settingsRow("Furigana on back", onOffPill(data.profile.showFuriganaOnBack, (v) => setAdvancedDisplay("showFuriganaOnBack", v)), null)
         )
       )
     );

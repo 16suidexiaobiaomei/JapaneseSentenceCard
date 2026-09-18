@@ -3639,7 +3639,9 @@
         ),
         h(
           "div",
-          { style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "var(--bg-tint)", border: "1px solid var(--border-1)", borderRadius: "14px", fontSize: "14px", color: d.romaji ? "var(--text-primary)" : "var(--text-faint)" } },
+          // Plain text, not a bordered/filled box — it shouldn't read as
+          // a form field at all, since there's nothing to fill in here.
+          { style: { marginTop: "8px", fontSize: "14px", lineHeight: "1.5", color: d.romaji ? "var(--text-primary)" : "var(--text-faint)" } },
           d.romaji || (d.romajiLoading ? "Getting the reading ready…" : "Kinō wa oyogimashita.")
         )
       ),

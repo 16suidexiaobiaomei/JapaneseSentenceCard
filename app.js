@@ -1483,12 +1483,7 @@
     return {
       editingId: null, front: "", romaji: "", kana: "", furigana: "", back: "", tags: [], newTag: "", tagError: "",
       audioMode: "system", recState: "idle", recSec: 0, recording: null,
-      // Romaji auto-fill bookkeeping — see handleFrontBlur().
-      // romajiAuto: current d.romaji was set by us and hasn't been hand-edited,
-      // so the next auto-generation is free to silently replace it.
-      romajiAuto: true,
-      romajiSourceFront: "", // front text the last generation attempt used
-      romajiSuggestion: null, // pending suggestion when romajiAuto is false
+      romajiSourceFront: "", // front text the last generation attempt used — avoids regenerating on every blur when nothing changed
       romajiLoading: false,
     };
   }
@@ -1509,11 +1504,7 @@
       recState: isVoice ? "done" : "idle",
       recSec: 0,
       recording: isVoice ? card.audio.data : null,
-      // An existing card's romaji is never silently overwritten — editing
-      // the front only ever surfaces a suggestion to accept or ignore.
-      romajiAuto: false,
       romajiSourceFront: card.front,
-      romajiSuggestion: null,
       romajiLoading: false,
     };
     ui.screen = "add";
@@ -1586,15 +1577,19 @@
     // a freshly-built object from the server response, so a captured
     // object reference would silently look "deleted" by the next
     // iteration even though the card is very much still there.
-    const ids = data.cards.filter((c) => (!c.kana || !c.furigana) && JAPANESE_RE.test(c.front)).map((c) => c.id);
+    // romaji is included now too — it's read-only/machine-generated for
+    // every card (no more hand-editing to preserve), so a blank one is
+    // exactly the same kind of gap as a blank kana/furigana.
+    const ids = data.cards.filter((c) => (!c.kana || !c.furigana || !c.romaji) && JAPANESE_RE.test(c.front)).map((c) => c.id);
     if (!ids.length) return;
     backfillingReadings = true;
     try {
       for (const id of ids) {
         const c = data.cards.find((x) => x.id === id);
-        if (!c || (c.kana && c.furigana)) continue; // deleted, or already caught up some other way
+        if (!c || (c.kana && c.furigana && c.romaji)) continue; // deleted, or already caught up some other way
         const result = await generateRomaji(c.front);
         if (!result || !result.kana) continue;
+        c.romaji = result.romaji;
         c.kana = result.kana;
         c.furigana = result.furigana;
         c.updatedAt = Date.now();
@@ -1626,26 +1621,11 @@
     if (d.front.trim() !== front) { render(); return; }
     if (result === null) { render(); return; }
 
-    // Unlike romaji, kana/furigana are never shown or hand-edited —
+    // romaji/kana/furigana are all read-only, machine-generated —
     // always take the fresh conversion for the current front text.
+    d.romaji = result.romaji;
     d.kana = result.kana;
     d.furigana = result.furigana;
-
-    if (d.romajiAuto) {
-      d.romaji = result.romaji;
-      d.romajiSuggestion = null;
-    } else if (result.romaji !== d.romaji) {
-      d.romajiSuggestion = result.romaji;
-    }
-    render();
-  }
-
-  function acceptRomajiSuggestion() {
-    const d = ui.draft;
-    if (!d.romajiSuggestion) return;
-    d.romaji = d.romajiSuggestion;
-    d.romajiAuto = true;
-    d.romajiSuggestion = null;
     render();
   }
 
@@ -3657,14 +3637,11 @@
           h("div", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Romaji · auto-generated"),
           d.romajiLoading ? h("div", { style: { fontSize: "11px", color: "var(--text-faint)" } }, "Generating…") : null
         ),
-        h("input", { "data-field": "romaji", value: d.romaji, placeholder: "Kinō wa oyogimashita.", style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "14px", fontSize: "14px", color: "var(--text-primary)" }, oninput: (e) => { d.romaji = e.target.value; d.romajiAuto = false; d.romajiSuggestion = null; }, onblur: flushRender }),
-        d.romajiSuggestion
-          ? h(
-              "div",
-              { class: "tap", style: { marginTop: "8px", fontSize: "12.5px", color: "var(--accent)" }, onclick: acceptRomajiSuggestion },
-              "Suggested: " + d.romajiSuggestion + " · Tap to use"
-            )
-          : null
+        h(
+          "div",
+          { style: { marginTop: "10px", width: "100%", padding: "14px 16px", background: "var(--bg-tint)", border: "1px solid var(--border-1)", borderRadius: "14px", fontSize: "14px", color: d.romaji ? "var(--text-primary)" : "var(--text-faint)" } },
+          d.romaji || (d.romajiLoading ? "Getting the reading ready…" : "Kinō wa oyogimashita.")
+        )
       ),
 
       h(

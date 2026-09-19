@@ -303,6 +303,7 @@
     communityLangFilter: "Any",
     tagDetail: null, // { row, previewCards, loading } while viewing a shared tag's detail
     downloadDraft: null, // { row, name, error, busy } confirming/renaming before a download
+    paywall: null, // { offering, selected, loading, busy, error } while the paywall is open
   };
 
   let recTimer = null;
@@ -1789,6 +1790,8 @@
 
   async function logOut() {
     if (!confirm("Log out?")) return;
+    const plugin = purchasesPlugin();
+    if (plugin) { try { await plugin.logOut(); } catch (e) {} }
     resetToAuthScreen();
     await sb.auth.signOut();
   }
@@ -1820,6 +1823,160 @@
   }
 
   // ---------------------------------------------------------------------
+  // Premium purchases (RevenueCat) — iOS only. There's no StoreKit on
+  // the web, so every helper here quietly no-ops there; upgrading is
+  // only possible from the native app.
+  // ---------------------------------------------------------------------
+
+  const REVENUECAT_API_KEY = "appl_jZnsSobkiyzqIZKuKNAQjHZelzH";
+  const REVENUECAT_ENTITLEMENT = "premium";
+
+  function purchasesPlugin() {
+    return (typeof Capacitor !== "undefined" && Capacitor.isNativePlatform && Capacitor.isNativePlatform() && Capacitor.Plugins && Capacitor.Plugins.Purchases) || null;
+  }
+
+  // Configured once per app lifetime, then just logged in on subsequent
+  // calls (e.g. signing into a different account without a full reload)
+  // — RevenueCat's own guidance is to call configure() only once. The
+  // Supabase user id is used as RevenueCat's appUserID, so the webhook
+  // payload's app_user_id is directly the profiles.id to update — no
+  // separate mapping table needed.
+  let purchasesConfigured = false;
+  async function configurePurchases(userId) {
+    const plugin = purchasesPlugin();
+    if (!plugin || !userId) return;
+    try {
+      if (!purchasesConfigured) {
+        await plugin.configure({ apiKey: REVENUECAT_API_KEY, appUserID: userId });
+        purchasesConfigured = true;
+      } else {
+        await plugin.logIn({ appUserID: userId });
+      }
+    } catch (e) {
+      console.warn("RevenueCat configure/logIn failed", e);
+    }
+  }
+
+  function isEntitlementActive(customerInfo) {
+    const e = customerInfo && customerInfo.entitlements && customerInfo.entitlements.active && customerInfo.entitlements.active[REVENUECAT_ENTITLEMENT];
+    return !!(e && e.isActive);
+  }
+
+  // Optimistic only — the RevenueCat webhook is the durable source of
+  // truth for profiles.plan (plan is never client-writable, see the
+  // premium_plan migration). This just avoids a jarring "still shows
+  // Free" moment for the few seconds before the next sync catches up.
+  function markPremiumLocally() {
+    data.profile.plan = "premium";
+    saveData();
+  }
+
+  async function openPaywall() {
+    const plugin = purchasesPlugin();
+    ui.paywall = { offering: null, selected: "annual", loading: true, busy: false, error: "" };
+    go("paywall");
+    if (!plugin) {
+      ui.paywall.loading = false;
+      ui.paywall.error = "Upgrading is only available in the iOS app right now.";
+      render();
+      return;
+    }
+    try {
+      const offerings = await plugin.getOfferings();
+      ui.paywall.offering = offerings.current;
+      if (!offerings.current || !offerings.current.monthly || !offerings.current.annual) {
+        ui.paywall.error = "Pricing isn't set up yet — please try again later.";
+      }
+    } catch (e) {
+      ui.paywall.error = "Couldn't load pricing. Check your connection and try again.";
+    }
+    ui.paywall.loading = false;
+    render();
+  }
+
+  function selectPaywallPlan(key) {
+    ui.paywall.selected = key;
+    render();
+  }
+
+  async function submitPurchase() {
+    const p = ui.paywall;
+    if (!p || p.busy || !p.offering) return;
+    const pkg = p.selected === "monthly" ? p.offering.monthly : p.offering.annual;
+    if (!pkg) return;
+    const plugin = purchasesPlugin();
+    if (!plugin) return;
+    p.busy = true;
+    p.error = "";
+    render();
+    try {
+      const result = await plugin.purchasePackage({ aPackage: pkg });
+      p.busy = false;
+      if (isEntitlementActive(result.customerInfo)) {
+        markPremiumLocally();
+        ui.paywall = null;
+        go("membership");
+        alert("Welcome to Premium!");
+        return;
+      }
+      p.error = "Purchase completed, but Premium isn't active yet — try Restore in a moment.";
+      render();
+    } catch (e) {
+      p.busy = false;
+      if (e && e.userCancelled) { render(); return; } // silent — they just backed out
+      p.error = (e && e.message) || "Purchase failed. Please try again.";
+      render();
+    }
+  }
+
+  async function restorePaywallPurchases() {
+    const p = ui.paywall;
+    const plugin = purchasesPlugin();
+    if (!p || p.busy || !plugin) return;
+    p.busy = true;
+    p.error = "";
+    render();
+    try {
+      const { customerInfo } = await plugin.restorePurchases();
+      p.busy = false;
+      if (isEntitlementActive(customerInfo)) {
+        markPremiumLocally();
+        ui.paywall = null;
+        go("membership");
+        alert("Restored — you're on Premium.");
+        return;
+      }
+      p.error = "No active Premium purchase found for this Apple ID.";
+      render();
+    } catch (e) {
+      p.busy = false;
+      p.error = (e && e.message) || "Couldn't restore purchases.";
+      render();
+    }
+  }
+
+  // Same as restorePaywallPurchases(), but reachable straight from the
+  // Membership screen (no ui.paywall state to hang a busy/error UI off
+  // of) — for someone who already subscribed but whose plan hasn't
+  // synced down yet (e.g. a reinstall).
+  async function restoreFromMembership() {
+    const plugin = purchasesPlugin();
+    if (!plugin) { alert("Restoring purchases is only available in the iOS app."); return; }
+    try {
+      const { customerInfo } = await plugin.restorePurchases();
+      if (isEntitlementActive(customerInfo)) {
+        markPremiumLocally();
+        render();
+        alert("Restored — you're on Premium.");
+      } else {
+        alert("No active Premium purchase found for this Apple ID.");
+      }
+    } catch (e) {
+      alert("Couldn't restore purchases: " + ((e && e.message) || "unknown error"));
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // Auth screens (sign up + one-time email code, or log in)
   // ---------------------------------------------------------------------
 
@@ -1839,6 +1996,7 @@
     applyTheme();
     ui.screen = "home";
     render();
+    configurePurchases(userId); // not awaited — shouldn't block getting into the app
     await syncNow();
   }
 
@@ -3982,7 +4140,10 @@
 
         isPremium
           ? h("div", { style: { fontSize: "13px", lineHeight: "1.6", color: "var(--text-faint)", textAlign: "center" } }, "Manage your subscription through the App Store.")
-          : h("div", { style: { fontSize: "13px", lineHeight: "1.6", color: "var(--text-faint)", textAlign: "center" } }, "Upgrading from the app is coming soon.")
+          : [
+              h("div", { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", background: "var(--accent)", color: "var(--text-on-accent)", fontSize: "15.5px", fontWeight: "500" }, onclick: openPaywall }, "Upgrade to Premium"),
+              h("div", { class: "tap", style: { marginTop: "-8px", textAlign: "center", fontSize: "13px", color: "var(--text-secondary)" }, onclick: restoreFromMembership }, "Restore purchases"),
+            ]
       )
     );
   }
@@ -4019,6 +4180,145 @@
           settingsRow("Furigana on back", onOffPill(data.profile.showFuriganaOnBack, (v) => setAdvancedDisplay("showFuriganaOnBack", v)), null)
         )
       )
+    );
+  }
+
+  function paywallBenefitRow(text) {
+    return h(
+      "div",
+      { style: { display: "flex", alignItems: "flex-start", gap: "10px" } },
+      h(
+        "div",
+        { style: { width: "20px", height: "20px", borderRadius: "9999px", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0", marginTop: "1px" } },
+        icon('<path d="m5 13 4.5 4.5L19 7"/>', 11, "var(--text-on-accent)", { "stroke-width": "3.6" })
+      ),
+      h("span", { style: { fontSize: "14.5px", lineHeight: "1.5", color: "var(--text-primary)" } }, text)
+    );
+  }
+
+  function paywallPlanCard(key, pkg, selected) {
+    const isMonthly = key === "monthly";
+    return h(
+      "div",
+      {
+        class: "tap",
+        style: {
+          padding: "14px 16px", borderRadius: "14px", background: "var(--bg-surface)",
+          border: selected ? "2px solid var(--accent)" : "1px solid var(--border-1)",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        },
+        onclick: () => selectPaywallPlan(key),
+      },
+      h(
+        "div",
+        {},
+        h("div", { style: { fontSize: "15px", fontWeight: "600", color: "var(--text-primary)" } }, isMonthly ? "Monthly" : "Annual"),
+        h(
+          "div",
+          { style: { marginTop: "2px", fontSize: "12.5px", color: selected && !isMonthly ? "var(--accent)" : "var(--text-muted)" } },
+          isMonthly
+            ? "Billed every month"
+            : selected && pkg
+              ? pkg.product.pricePerMonthString + " / month · save ~42%"
+              : "Save ~42%"
+        )
+      ),
+      h(
+        "div",
+        { style: { textAlign: "right" } },
+        h("div", { style: { fontSize: "17px", fontWeight: "600", color: "var(--text-primary)" } }, pkg ? pkg.product.priceString : "—"),
+        h("div", { style: { fontSize: "11.5px", color: "var(--text-muted)" } }, isMonthly ? "per month" : "per year")
+      )
+    );
+  }
+
+  function screenPaywall() {
+    const p = ui.paywall;
+    const offering = p.offering;
+    const monthlyPkg = offering && offering.monthly;
+    const annualPkg = offering && offering.annual;
+    const selectedPkg = p.selected === "monthly" ? monthlyPkg : annualPkg;
+    const isAnnual = p.selected === "annual";
+
+    return h(
+      "div",
+      { style: { minHeight: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" } },
+
+      h(
+        "div",
+        { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px" } },
+        h(
+          "div",
+          { class: "tap", style: { width: "34px", height: "34px", borderRadius: "9999px", background: "var(--bg-tint)", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: () => go("membership") },
+          icon('<path d="M18 6L6 18M6 6l12 12"/>', 15, "var(--text-secondary)")
+        ),
+        h("span", { class: p.busy ? "" : "tap", style: { fontSize: "14px", color: "var(--text-secondary)" }, onclick: p.busy ? null : restorePaywallPurchases }, "Restore")
+      ),
+
+      p.loading
+        ? h("div", { style: { flex: "1", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", color: "var(--text-faint)" } }, "Loading…")
+        : h(
+            "div",
+            { style: { padding: "18px 20px 0", display: "flex", flexDirection: "column", flex: "1" } },
+
+            h(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "8px" } },
+              h("span", { style: { fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Premium"),
+              isAnnual ? h("span", { style: { fontSize: "10.5px", fontWeight: "600", color: "var(--text-on-accent)", background: "var(--accent)", borderRadius: "9999px", padding: "3px 9px" } }, "Best value") : null
+            ),
+            h("div", { style: { marginTop: "4px", fontFamily: "var(--serif)", fontSize: "27px", fontWeight: "500", color: "var(--text-primary)" } }, isAnnual ? "Premium Annually" : "Premium Monthly"),
+            h(
+              "div",
+              { style: { marginTop: "6px", fontSize: "13.5px", lineHeight: "1.5", color: "var(--text-secondary)" } },
+              isAnnual && annualPkg
+                ? "Enjoy ~42% off (" + annualPkg.product.pricePerMonthString + "/mo) from annual premium."
+                : "Unlocks advanced settings, unlimited tags and downloads."
+            ),
+
+            p.error ? h("div", { style: { marginTop: "14px", fontSize: "12.5px", lineHeight: "1.5", color: "var(--accent)" } }, p.error) : null,
+
+            h(
+              "div",
+              { style: { marginTop: "18px", display: "flex", flexDirection: "column", gap: "13px", background: "var(--bg-surface)", border: "1px solid var(--border-1)", borderRadius: "16px", padding: "18px" } },
+              paywallBenefitRow("Unlimited tags"),
+              paywallBenefitRow("Unlimited downloads from community"),
+              paywallBenefitRow("Advanced settings to customize your review card"),
+              isAnnual
+                ? h("div", { style: { display: "flex", flexDirection: "column", gap: "13px" } }, h("div", { style: { height: "1px", background: "var(--border-1)" } }), paywallBenefitRow("Two months free against monthly"))
+                : null
+            ),
+
+            h("div", { style: { marginTop: "22px", fontSize: "11px", letterSpacing: ".09em", textTransform: "uppercase", color: "var(--text-faint)" } }, "Choose a plan"),
+            h(
+              "div",
+              { style: { marginTop: "10px", display: "flex", flexDirection: "column", gap: "10px" } },
+              paywallPlanCard("monthly", monthlyPkg, p.selected === "monthly"),
+              paywallPlanCard("annual", annualPkg, p.selected === "annual")
+            ),
+
+            h("div", { style: { flex: "1", minHeight: "20px" } }),
+
+            h(
+              "div",
+              {
+                class: (!p.busy && selectedPkg) ? "tap" : "",
+                style: {
+                  padding: "16px", borderRadius: "14px", textAlign: "center",
+                  background: selectedPkg ? "var(--accent)" : "var(--bg-tint)",
+                  color: selectedPkg ? "var(--text-on-accent)" : "var(--text-faint)",
+                  fontSize: "15.5px", fontWeight: "500", opacity: p.busy ? ".7" : "1",
+                },
+                onclick: (!p.busy && selectedPkg) ? submitPurchase : null,
+              },
+              p.busy ? "Please wait…" : "Subscribe · " + (selectedPkg ? selectedPkg.product.priceString : "") + (isAnnual ? " / year" : " / month")
+            ),
+            h(
+              "div",
+              { style: { marginTop: "10px", textAlign: "center", fontSize: "11.5px", color: "var(--text-faint)", paddingBottom: "14px" } },
+              isAnnual ? "Renews yearly. Cancel any time in Settings." : "Renews monthly. Cancel any time in Settings."
+            )
+          )
     );
   }
 
@@ -4088,6 +4388,7 @@
       case "changePassword": content = screenChangePassword(); break;
       case "membership": content = screenMembership(); break;
       case "advancedSettings": content = screenAdvancedSettings(); break;
+      case "paywall": content = screenPaywall(); break;
       default: content = screenHome();
     }
 

@@ -20,6 +20,7 @@
   "dependencies": {
     "@capacitor/core": "^8.5.1",
     "@capacitor/ios": "^8.5.1",
+    "@revenuecat/purchases-capacitor": "^13.6.0",
     "@supabase/supabase-js": "^2.109.0",
     "kuromoji": "^0.1.2",
     "kuroshiro": "^1.2.0",

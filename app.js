@@ -14,6 +14,7 @@
   // Japanese sentence they correspond to, hence the higher back limit.
   const FRONT_MAX_LENGTH = 60;
   const BACK_MAX_LENGTH = 100;
+  const USERNAME_MAX_LENGTH = 15;
 
   // ---------------------------------------------------------------------
   // Supabase (auth + cloud database). The publishable key is meant to be
@@ -304,6 +305,7 @@
     tagDetail: null, // { row, previewCards, loading } while viewing a shared tag's detail
     downloadDraft: null, // { row, name, error, busy } confirming/renaming before a download
     paywall: null, // { offering, selected, loading, busy, error } while the paywall is open
+    membershipInfo: null, // { loading, expirationDate, willRenew } — refreshed each time the Membership screen opens
   };
 
   let recTimer = null;
@@ -937,6 +939,7 @@
   function go(screen) {
     ui.screen = screen;
     render();
+    if (screen === "membership") refreshMembershipInfo();
   }
 
   function cardsMatchingTags(tags) {
@@ -1749,7 +1752,7 @@
     // plan/showRomajiOnFront/etc (not part of profileDraft), which
     // briefly made a Premium account render as Free until the next sync
     // pulled the real profile back down.
-    data.profile.username = ui.profileDraft.username.trim();
+    data.profile.username = ui.profileDraft.username.trim().slice(0, USERNAME_MAX_LENGTH);
     data.profile.photo = ui.profileDraft.photo;
     saveData();
     go("home");
@@ -2015,6 +2018,32 @@
     } catch (e) {
       alert("Couldn't restore purchases: " + ((e && e.message) || "unknown error"));
     }
+  }
+
+  // Refreshed every time the Membership screen opens (see go()) — not
+  // cached in data.profile since it's just for display, not a gate.
+  async function refreshMembershipInfo() {
+    if (data.profile.plan !== "premium") { ui.membershipInfo = null; return; }
+    const plugin = purchasesPlugin();
+    if (!plugin) { ui.membershipInfo = null; return; }
+    ui.membershipInfo = { loading: true, expirationDate: null, willRenew: null };
+    render();
+    try {
+      const { customerInfo } = await plugin.getCustomerInfo();
+      const e = customerInfo.entitlements.active[REVENUECAT_ENTITLEMENT];
+      ui.membershipInfo = { loading: false, expirationDate: e ? e.expirationDate : null, willRenew: e ? e.willRenew : null };
+    } catch (err) {
+      ui.membershipInfo = { loading: false, expirationDate: null, willRenew: null };
+    }
+    render();
+  }
+
+  // Apple requires subscriptions to be cancelable without building any
+  // billing UI of our own — this deep-links straight to the native
+  // subscription management screen (Settings/App Store handle the rest).
+  function openManageSubscriptions() {
+    const url = "https://apps.apple.com/account/subscriptions";
+    window.open(url, window.Capacitor && window.Capacitor.isNativePlatform() ? "_system" : "_blank");
   }
 
   // ---------------------------------------------------------------------
@@ -4029,7 +4058,7 @@
             )
           ),
           h("input", {
-            "data-field": "profileUsername", value: d.username, placeholder: "Your username",
+            "data-field": "profileUsername", value: d.username, placeholder: "Your username", maxlength: String(USERNAME_MAX_LENGTH),
             style: { width: "220px", border: "none", outline: "none", background: "transparent", textAlign: "center", fontFamily: "var(--serif)", fontSize: "28px", fontWeight: "500", color: "var(--text-primary)", padding: "2px 8px 7px", borderBottom: "1.5px dashed var(--text-faintest)" },
             oninput: (e) => { d.username = e.target.value; },
             onblur: flushRender,
@@ -4144,6 +4173,16 @@
     );
   }
 
+  function membershipExpiryLine(info) {
+    if (!info || info.loading || !info.expirationDate) return null;
+    const dateStr = new Date(info.expirationDate).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+    return h(
+      "div",
+      { style: { fontSize: "13px", lineHeight: "1.6", color: "var(--text-faint)", textAlign: "center" } },
+      info.willRenew ? "Renews on " + dateStr + "." : "Expires on " + dateStr + " — auto-renew is off."
+    );
+  }
+
   function screenMembership() {
     const isPremium = data.profile.plan === "premium";
     return h(
@@ -4178,7 +4217,14 @@
         ),
 
         isPremium
-          ? h("div", { style: { fontSize: "13px", lineHeight: "1.6", color: "var(--text-faint)", textAlign: "center" } }, "Manage your subscription through the App Store.")
+          ? [
+              membershipExpiryLine(ui.membershipInfo),
+              h(
+                "div",
+                { class: "tap", style: { textAlign: "center", fontSize: "13px", color: "var(--text-secondary)" }, onclick: openManageSubscriptions },
+                "Manage or cancel subscription"
+              ),
+            ]
           : [
               h("div", { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", background: "var(--accent)", color: "var(--text-on-accent)", fontSize: "15.5px", fontWeight: "500" }, onclick: openPaywall }, "Upgrade to Premium"),
               h("div", { class: "tap", style: { marginTop: "-8px", textAlign: "center", fontSize: "13px", color: "var(--text-secondary)" }, onclick: restoreFromMembership }, "Restore purchases"),
@@ -4311,7 +4357,7 @@
               "div",
               { style: { marginTop: "6px", fontSize: "13.5px", lineHeight: "1.5", color: "var(--text-secondary)" } },
               isAnnual && annualPkg
-                ? "Enjoy ~42% off (" + annualPkg.product.pricePerMonthString + "/mo) from annual premium."
+                ? "Enjoy ~42% off (" + annualPkg.product.pricePerMonthString + "/mo) with annual premium."
                 : "Unlocks advanced settings, unlimited tags and downloads."
             ),
 

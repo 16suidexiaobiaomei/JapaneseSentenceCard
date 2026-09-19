@@ -366,7 +366,7 @@
     (pendingTags || []).forEach((t) => { if (t !== UNTAGGED_TAG) known.add(t); });
     if (known.has(tagName)) return null; // reusing an existing/already-queued tag is always fine
     if (known.size >= FREE_TAG_LIMIT) {
-      return "Free accounts can use up to " + FREE_TAG_LIMIT + " tags. Upgrade to Premium for unlimited tags, downloading from Community, and advanced settings.";
+      return "You've reached the " + FREE_TAG_LIMIT + "-tag limit for free accounts. Upgrade to Premium for unlimited tags.";
     }
     return null;
   }
@@ -1119,7 +1119,7 @@
 
   function openBulkTagSheet() {
     if (!ui.selectedIds.length) return;
-    ui.bulkTagSheet = { query: "", checked: [], tagError: "" };
+    ui.bulkTagSheet = { query: "", checked: [] };
     render();
   }
 
@@ -1140,10 +1140,9 @@
     if (!t) return;
     if (s.checked.includes(t)) { s.query = ""; render(); return; }
     const err = tagLimitError(t, s.checked);
-    if (err) { s.tagError = err; render(); return; }
+    if (err) { alert(err); openPaywall(); return; }
     s.checked = s.checked.concat(t);
     s.query = "";
-    s.tagError = "";
     render();
   }
 
@@ -1304,8 +1303,8 @@
     // friendlier, immediate upsell instead of making them fill out the
     // whole sheet first only to hit a rejected-request error.
     if (data.profile.plan !== "premium") {
-      alert("Downloading shared tags is a Premium feature. Upgrade to Premium to add tags from the community.");
-      go("membership");
+      alert("Upgrade to Premium to download tags from the community.");
+      openPaywall();
       return;
     }
     const collision = browsableTags().includes(row.name);
@@ -1473,16 +1472,15 @@
     const t = d.newTag.trim();
     if (!t || d.tags.includes(t)) { d.newTag = ""; render(); return; }
     const err = tagLimitError(t, d.tags);
-    if (err) { d.tagError = err; render(); return; }
+    if (err) { alert(err); openPaywall(); return; }
     d.tags = d.tags.concat(t);
     d.newTag = "";
-    d.tagError = "";
     render();
   }
 
   function blankDraft() {
     return {
-      editingId: null, front: "", romaji: "", kana: "", furigana: "", back: "", tags: [], newTag: "", tagError: "",
+      editingId: null, front: "", romaji: "", kana: "", furigana: "", back: "", tags: [], newTag: "",
       audioMode: "system", recState: "idle", recSec: 0, recording: null,
       romajiSourceFront: "", // front text the last generation attempt used — avoids regenerating on every blur when nothing changed
       romajiLoading: false,
@@ -1500,7 +1498,6 @@
       back: card.back,
       tags: card.tags.slice(),
       newTag: "",
-      tagError: "",
       audioMode: isVoice ? "record" : "system",
       recState: isVoice ? "done" : "idle",
       recSec: 0,
@@ -1871,9 +1868,14 @@
     saveData();
   }
 
+  // returnScreen remembers wherever the paywall was opened from (a tag
+  // detail's download prompt, Advanced Settings, Add Card, Membership,
+  // ...) so closing or completing a purchase lands back there instead
+  // of always jumping to Membership.
   async function openPaywall() {
     const plugin = purchasesPlugin();
-    ui.paywall = { offering: null, selected: "annual", loading: true, busy: false, error: "" };
+    const returnScreen = ui.screen;
+    ui.paywall = { offering: null, selected: "annual", loading: true, busy: false, error: "", returnScreen };
     go("paywall");
     if (!plugin) {
       ui.paywall.loading = false;
@@ -1888,10 +1890,19 @@
         ui.paywall.error = "Pricing isn't set up yet — please try again later.";
       }
     } catch (e) {
-      ui.paywall.error = "Couldn't load pricing. Check your connection and try again.";
+      // Surfacing the real error (rather than a generic "check your
+      // connection") since a failure here is almost always a
+      // RevenueCat/App Store Connect setup issue, not a network one.
+      ui.paywall.error = "Couldn't load pricing" + ((e && (e.message || e.code)) ? ": " + (e.message || e.code) : "") + ".";
     }
     ui.paywall.loading = false;
     render();
+  }
+
+  function closePaywall() {
+    const returnScreen = ui.paywall && ui.paywall.returnScreen;
+    ui.paywall = null;
+    go(returnScreen || "membership");
   }
 
   function selectPaywallPlan(key) {
@@ -1914,8 +1925,9 @@
       p.busy = false;
       if (isEntitlementActive(result.customerInfo)) {
         markPremiumLocally();
+        const returnScreen = p.returnScreen;
         ui.paywall = null;
-        go("membership");
+        go(returnScreen || "membership");
         alert("Welcome to Premium!");
         return;
       }
@@ -1941,8 +1953,9 @@
       p.busy = false;
       if (isEntitlementActive(customerInfo)) {
         markPremiumLocally();
+        const returnScreen = p.returnScreen;
         ui.paywall = null;
-        go("membership");
+        go(returnScreen || "membership");
         alert("Restored — you're on Premium.");
         return;
       }
@@ -3029,7 +3042,6 @@
         isNew
           ? h("div", { class: "tap", style: { display: "flex", alignItems: "center", gap: "9px", color: "var(--accent)", fontSize: "14.5px", fontWeight: "500" }, onclick: createBulkTag }, icon('<path d="M12 5v14M5 12h14"/>', 17, "var(--accent)"), "Create “" + s.query.trim() + "”")
           : null,
-        s.tagError ? h("div", { style: { fontSize: "12.5px", lineHeight: "1.5", color: "var(--accent)" } }, s.tagError) : null,
         h(
           "div",
           { class: s.checked.length ? "tap" : "", style: { padding: "16px", borderRadius: "14px", textAlign: "center", fontSize: "15px", fontWeight: "500", background: s.checked.length ? "var(--surface-invert-bg)" : "var(--bg-tint)", color: s.checked.length ? "var(--surface-invert-text)" : "var(--text-faint)" }, onclick: s.checked.length ? applyBulkTag : null },
@@ -3838,8 +3850,7 @@
           { style: { marginTop: "10px", display: "flex", gap: "8px" } },
           h("input", { "data-field": "newTag", value: d.newTag, placeholder: "New tag", style: { flex: "1", padding: "11px 14px", background: "var(--bg-surface)", border: "1px dashed var(--text-faintest)", borderRadius: "9999px", fontSize: "13px", color: "var(--text-primary)" }, oninput: (e) => { d.newTag = e.target.value; }, onblur: flushRender, onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addNewTag(); } } }),
           h("div", { class: "tap", style: { padding: "11px 18px", borderRadius: "9999px", background: "var(--bg-tint)", color: "var(--text-primary)", fontSize: "13px" }, onclick: addNewTag }, "Add")
-        ),
-        d.tagError ? h("div", { style: { marginTop: "8px", fontSize: "12.5px", lineHeight: "1.5", color: "var(--accent)" } }, d.tagError) : null
+        )
       ),
 
       h(
@@ -4033,8 +4044,8 @@
               : h("span", { style: { fontSize: "12px", color: "var(--text-faint)" } }, "Premium"),
             () => {
               if (data.profile.plan !== "premium") {
-                alert("Choosing what to show on the front of a review card is a Premium feature.");
-                go("membership");
+                alert("Upgrade to Premium to customize your review cards.");
+                openPaywall();
                 return;
               }
               go("advancedSettings");
@@ -4249,7 +4260,7 @@
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px" } },
         h(
           "div",
-          { class: "tap", style: { width: "34px", height: "34px", borderRadius: "9999px", background: "var(--bg-tint)", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: () => go("membership") },
+          { class: "tap", style: { width: "34px", height: "34px", borderRadius: "9999px", background: "var(--bg-tint)", display: "flex", alignItems: "center", justifyContent: "center" }, onclick: closePaywall },
           icon('<path d="M18 6L6 18M6 6l12 12"/>', 15, "var(--text-secondary)")
         ),
         h("span", { class: p.busy ? "" : "tap", style: { fontSize: "14px", color: "var(--text-secondary)" }, onclick: p.busy ? null : restorePaywallPurchases }, "Restore")
@@ -4293,8 +4304,8 @@
             h(
               "div",
               { style: { marginTop: "10px", display: "flex", flexDirection: "column", gap: "10px" } },
-              paywallPlanCard("monthly", monthlyPkg, p.selected === "monthly"),
-              paywallPlanCard("annual", annualPkg, p.selected === "annual")
+              paywallPlanCard("annual", annualPkg, p.selected === "annual"),
+              paywallPlanCard("monthly", monthlyPkg, p.selected === "monthly")
             ),
 
             h("div", { style: { flex: "1", minHeight: "20px" } }),

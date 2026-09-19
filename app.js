@@ -1242,10 +1242,18 @@
     const session = await getSessionSafe();
     if (!session) { ui.communityLoading = false; render(); return; }
     try {
-      // Ordered by download_count, so a bounded page still surfaces the
-      // most-relevant tags first as the community grows — this is a
-      // browse feed, not a full export of every tag ever shared.
-      const { data: feed } = await sb.from("shared_tags").select("*").eq("status", "active").order("download_count", { ascending: false }).limit(60);
+      // featured_rank first (lowest first, nulls/unset last) for event
+      // curation — e.g. pinning a festival-themed tag to the top — set
+      // directly via SQL, not client-writable; download_count breaks
+      // ties and orders everything else, so a bounded page still
+      // surfaces the most-relevant tags first as the community grows.
+      const { data: feed } = await sb
+        .from("shared_tags")
+        .select("*")
+        .eq("status", "active")
+        .order("featured_rank", { ascending: true, nullsFirst: false })
+        .order("download_count", { ascending: false })
+        .limit(60);
       ui.communityFeed = feed || [];
       communityFeedCache = ui.communityFeed;
       communityFeedCachedAt = Date.now();

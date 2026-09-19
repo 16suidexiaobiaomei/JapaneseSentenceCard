@@ -11,12 +11,17 @@ async function syncPlanForUser(appUserId) {
   const subRes = await fetch("https://api.revenuecat.com/v1/subscribers/" + encodeURIComponent(appUserId), {
     headers: { Authorization: "Bearer " + process.env.REVENUECAT_SECRET_API_KEY },
   });
-  if (!subRes.ok) return null; // unknown subscriber — nothing to update
+  if (!subRes.ok) {
+    const bodyText = await subRes.text().catch(() => "");
+    console.warn("syncPlanForUser: subscriber lookup failed", subRes.status, bodyText, "for", appUserId);
+    return null; // unknown subscriber — nothing to update
+  }
 
   const subData = await subRes.json();
   const entitlement = subData.subscriber && subData.subscriber.entitlements && subData.subscriber.entitlements[ENTITLEMENT];
   const isActive = !!(entitlement && (!entitlement.expires_date || new Date(entitlement.expires_date) > new Date()));
   const plan = isActive ? "premium" : "free";
+  console.log("syncPlanForUser:", appUserId, "entitlement:", JSON.stringify(entitlement), "-> plan:", plan);
 
   await fetch(SUPABASE_URL + "/rest/v1/profiles?id=eq." + encodeURIComponent(appUserId), {
     method: "PATCH",

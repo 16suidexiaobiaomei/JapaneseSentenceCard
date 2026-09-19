@@ -44,6 +44,8 @@ module.exports = async (req, res) => {
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + token },
     });
     if (!userRes.ok) {
+      const bodyText = await userRes.text().catch(() => "");
+      console.warn("sync-premium: token check failed", userRes.status, bodyText, "token length", token.length);
       res.status(401).json({ error: "Invalid or expired session" });
       return;
     }
@@ -53,7 +55,10 @@ module.exports = async (req, res) => {
       return;
     }
 
+    if (!process.env.REVENUECAT_SECRET_API_KEY) console.warn("sync-premium: REVENUECAT_SECRET_API_KEY is not set");
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) console.warn("sync-premium: SUPABASE_SERVICE_ROLE_KEY is not set");
     const plan = await syncPlanForUser(user.id);
+    console.log("sync-premium: resolved plan for user", user.id, "=", plan);
     res.status(200).json({ ok: true, plan: plan || "free" });
   } catch (e) {
     console.error("sync-premium error", e);

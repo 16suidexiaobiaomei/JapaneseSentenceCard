@@ -1,7 +1,10 @@
-// Vercel serverless function: RevenueCat webhook. This is the ONLY code
-// path allowed to write profiles.plan — the client never can (see the
-// premium_plan migration: no grant exists for it), so this is the
-// actual source of truth behind every premium gate in the app.
+// Vercel serverless function: RevenueCat webhook. Alongside sync-premium.js
+// (called directly by the client right after a purchase/restore, so the
+// database doesn't lag behind what the user just paid for), this is the
+// only other code path allowed to write profiles.plan — the client never
+// can on its own (see the premium_plan migration: no grant exists for it).
+// This one is the reconciler for everything that happens while the app
+// ISN'T open (renewals, cancellations, billing issues, refunds, ...).
 //
 // Rather than branching on event.type (INITIAL_PURCHASE vs RENEWAL vs
 // CANCELLATION vs EXPIRATION vs BILLING_ISSUE, each with different "are
@@ -12,8 +15,7 @@
 // plan to whatever's actually true at that moment. More robust than
 // trying to get every event-type transition exactly right.
 
-const SUPABASE_URL = "https://asgyhietqpoamagitycs.supabase.co";
-const ENTITLEMENT = "premium";
+const { syncPlanForUser } = require("./_revenuecat-sync");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
@@ -42,31 +44,13 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const subRes = await fetch("https://api.revenuecat.com/v1/subscribers/" + encodeURIComponent(appUserId), {
-      headers: { Authorization: "Bearer " + process.env.REVENUECAT_SECRET_API_KEY },
-    });
-    if (!subRes.ok) {
+    const plan = await syncPlanForUser(appUserId);
+    if (plan === null) {
       // Unknown/unfetchable subscriber (e.g. RevenueCat's own "Send
       // Test Event" uses a fake id) — nothing to update, not an error.
       res.status(200).json({ ok: true, warning: "subscriber lookup failed" });
       return;
     }
-    const subData = await subRes.json();
-    const entitlement = subData.subscriber && subData.subscriber.entitlements && subData.subscriber.entitlements[ENTITLEMENT];
-    const isActive = !!(entitlement && (!entitlement.expires_date || new Date(entitlement.expires_date) > new Date()));
-    const plan = isActive ? "premium" : "free";
-
-    await fetch(SUPABASE_URL + "/rest/v1/profiles?id=eq." + encodeURIComponent(appUserId), {
-      method: "PATCH",
-      headers: {
-        apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: "Bearer " + process.env.SUPABASE_SERVICE_ROLE_KEY,
-        "Content-Type": "application/json",
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify({ plan }),
-    });
-
     res.status(200).json({ ok: true, plan });
   } catch (e) {
     console.error("revenuecat webhook error", e);

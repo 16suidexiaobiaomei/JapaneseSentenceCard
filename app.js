@@ -1859,13 +1859,36 @@
     return !!(e && e.isActive);
   }
 
-  // Optimistic only — the RevenueCat webhook is the durable source of
-  // truth for profiles.plan (plan is never client-writable, see the
-  // premium_plan migration). This just avoids a jarring "still shows
-  // Free" moment for the few seconds before the next sync catches up.
+  // Local-only, so it can run instantly (no round trip) right after a
+  // purchase/restore — the real source of truth is still whatever's in
+  // the database (plan is never client-writable, see the premium_plan
+  // migration). Always pair a call to this with syncPremiumWithServer()
+  // so the database itself catches up before anything (a background
+  // syncNow(), a server-enforced RPC check) can read a stale "free" row
+  // and stomp this back — see sync-premium.js for why that race matters.
   function markPremiumLocally() {
     data.profile.plan = "premium";
     saveData();
+  }
+
+  // Pushes the *actual current* RevenueCat entitlement status to
+  // profiles.plan right away, rather than waiting on the webhook (which
+  // can lag long enough that backgrounding the app right after a
+  // purchase — e.g. to check Settings > Subscriptions — triggers
+  // syncNow() and overwrites the still-stale "free" row's optimistic
+  // premium flag). Failure is silent: the webhook will still catch up
+  // on its own, this is purely a "don't make them wait for it" nicety.
+  async function syncPremiumWithServer() {
+    try {
+      const session = await getSessionSafe();
+      if (!session) return;
+      await fetch(API_BASE + "/api/sync-premium", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + session.access_token },
+      });
+    } catch (e) {
+      console.warn("syncPremiumWithServer failed", e);
+    }
   }
 
   // returnScreen remembers wherever the paywall was opened from (a tag
@@ -1922,15 +1945,17 @@
     render();
     try {
       const result = await plugin.purchasePackage({ aPackage: pkg });
-      p.busy = false;
       if (isEntitlementActive(result.customerInfo)) {
         markPremiumLocally();
+        await syncPremiumWithServer();
+        p.busy = false;
         const returnScreen = p.returnScreen;
         ui.paywall = null;
         go(returnScreen || "membership");
         alert("Welcome to Premium!");
         return;
       }
+      p.busy = false;
       p.error = "Purchase completed, but Premium isn't active yet — try Restore in a moment.";
       render();
     } catch (e) {
@@ -1950,15 +1975,17 @@
     render();
     try {
       const { customerInfo } = await plugin.restorePurchases();
-      p.busy = false;
       if (isEntitlementActive(customerInfo)) {
         markPremiumLocally();
+        await syncPremiumWithServer();
+        p.busy = false;
         const returnScreen = p.returnScreen;
         ui.paywall = null;
         go(returnScreen || "membership");
         alert("Restored — you're on Premium.");
         return;
       }
+      p.busy = false;
       p.error = "No active Premium purchase found for this Apple ID.";
       render();
     } catch (e) {
@@ -1979,6 +2006,7 @@
       const { customerInfo } = await plugin.restorePurchases();
       if (isEntitlementActive(customerInfo)) {
         markPremiumLocally();
+        await syncPremiumWithServer();
         render();
         alert("Restored — you're on Premium.");
       } else {

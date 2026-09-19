@@ -1751,6 +1751,10 @@
     window.open("https://japanesesentencecards.com/support.html", "_blank");
   }
 
+  function openLegalPage(path) {
+    window.open(APP_URL + path, "_blank");
+  }
+
   function cancelProfile() {
     go("home");
   }
@@ -4408,8 +4412,15 @@
             ),
             h(
               "div",
-              { style: { marginTop: "10px", textAlign: "center", fontSize: "11.5px", color: "var(--text-faint)", paddingBottom: "14px" } },
+              { style: { marginTop: "10px", textAlign: "center", fontSize: "11.5px", color: "var(--text-faint)" } },
               isAnnual ? "Renews yearly. Cancel any time in Settings." : "Renews monthly. Cancel any time in Settings."
+            ),
+            h(
+              "div",
+              { style: { marginTop: "6px", textAlign: "center", fontSize: "11.5px", color: "var(--text-faint)", paddingBottom: "14px" } },
+              h("span", { class: "tap", style: { color: "var(--text-faint)", textDecoration: "underline" }, onclick: () => openLegalPage("privacy.html") }, "Privacy Policy"),
+              "  ·  ",
+              h("span", { class: "tap", style: { color: "var(--text-faint)", textDecoration: "underline" }, onclick: () => openLegalPage("terms.html") }, "Terms of Use")
             )
           )
     );

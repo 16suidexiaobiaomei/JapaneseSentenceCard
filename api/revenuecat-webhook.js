@@ -24,17 +24,19 @@ module.exports = async (req, res) => {
   }
 
   // RevenueCat sends this back exactly as configured in its dashboard
-  // (Integrations -> Webhooks -> Authorization header value).
+  // (Integrations -> Webhooks -> Authorization header value) — which
+  // turns out to be the raw secret with NO "Bearer " prefix added
+  // (confirmed live: incoming header length matched the bare secret's
+  // length, not "Bearer "+secret's), so accept either shape rather than
+  // assuming a scheme RevenueCat doesn't actually follow.
   const authHeader = req.headers["authorization"] || "";
-  const expected = process.env.REVENUECAT_WEBHOOK_SECRET ? "Bearer " + process.env.REVENUECAT_WEBHOOK_SECRET : null;
-  if (!expected || authHeader !== expected) {
-    // Never log the actual secret values — just enough shape info (are
-    // they even close, or is one of them simply missing/empty) to tell
-    // "wrong value configured" apart from "no header sent at all".
+  const secret = process.env.REVENUECAT_WEBHOOK_SECRET;
+  const authorized = !!secret && (authHeader === secret || authHeader === "Bearer " + secret);
+  if (!authorized) {
     console.warn(
-      "revenuecat webhook: auth mismatch — env var set:", !!process.env.REVENUECAT_WEBHOOK_SECRET,
+      "revenuecat webhook: auth mismatch — env var set:", !!secret,
       "header present:", !!authHeader, "header length:", authHeader.length,
-      "expected length:", expected ? expected.length : 0
+      "secret length:", secret ? secret.length : 0
     );
     res.status(401).json({ error: "unauthorized" });
     return;

@@ -4,7 +4,10 @@ Submit this text via **both**: (1) "Reply to App Review" in App Store Connect, a
 
 ---
 
-**Note on content moderation:** the Community feature is anonymous tag-sharing (download-only) with no user profiles or messaging between users, so there is no user-to-user "block" feature to demonstrate. Moderation works via the reporting flow shown in the recording: a tag hidden pending review after enough reports, and an account's sharing ability paused for 30 days after two of its tags are removed this way.
+**1. Screen recording**
+Attached, captured on a physical iPhone running iOS 26.7 (latest at time of recording), against Build 4 — which includes the Privacy Policy and Terms of Use links on the subscription screen. Starts from a cold launch and covers: account registration/login/deletion (plus a failed login attempt after deletion), reviewing and creating cards, tagging, reporting a tag in Community, a sandbox Premium purchase (showing both plans' title/duration/price and the working legal links), downloading a shared tag, and Advanced Settings.
+
+Note: Community is anonymous tag-download only, with no user profiles or messaging — so there's no user-blocking feature to show. Moderation is via reporting: a tag is auto-hidden pending review after enough reports, and an account's sharing is paused 30 days after two of its tags are removed this way.
 
 **2. App purpose and target audience**
 Japanese Sentence Card helps self-directed Japanese language learners (beginner–intermediate) study using example-sentence flashcards with spaced repetition (FSRS). Each card shows a Japanese sentence with automatically generated romaji and furigana, alongside a user-written translation. A Community feature lets users share and download sentence decks other learners have created.
@@ -16,12 +19,12 @@ No account is required to browse the app's own seed deck. An email + one-time co
 Sign-up is also fully functional with any real email if you'd prefer to create your own account directly.
 
 **4. External services used**
-- Supabase — authentication and database (accounts, cards, tags).
-- Vercel — hosting and serverless functions, including a self-hosted, on-device Japanese-to-romaji/furigana converter (kuromoji library) — no third-party AI or translation API is used for this.
-- RevenueCat — subscription/entitlement management for the Premium plan.
-- Apple's App Store — all payment processing; we never receive or store card details.
-- iOS's built-in text-to-speech (on-device) is used to optionally read a card's sentence aloud.
-No analytics, advertising, or tracking SDKs are used anywhere in the app.
+- Supabase — auth and database (accounts, cards, tags).
+- Vercel — hosting and serverless functions, including a self-hosted Japanese-to-romaji/furigana converter (kuromoji library); no third-party AI/translation API is used.
+- RevenueCat — subscription/entitlement management.
+- Apple's App Store — all payment processing; we never see card details.
+- iOS's built-in text-to-speech (on-device) optionally reads a card's sentence aloud.
+No analytics, advertising, or tracking SDKs are used.
 
 **5. Regional differences**
 The app functions identically in every region. The only regional variation is the local-currency price for the Premium subscription, which the App Store localizes automatically. There is no other region-gated content or feature.

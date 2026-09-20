@@ -43,10 +43,11 @@ module.exports = async (req, res) => {
   }
 
   const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
+  const event = (body && body.event) || {};
   // app_user_id is the RevenueCat appUserID, which the client sets to
   // the Supabase auth user id at configure()/logIn() time — so it's
   // directly the profiles.id to update, no separate mapping needed.
-  const appUserId = body && body.event && body.event.app_user_id;
+  const appUserId = event.app_user_id;
   if (!appUserId) {
     // Nothing we can act on (e.g. a malformed test payload) — ack
     // anyway so RevenueCat doesn't keep retrying this one forever.
@@ -56,6 +57,20 @@ module.exports = async (req, res) => {
 
   try {
     const plan = await syncPlanForUser(appUserId);
+
+    // TRANSFER events (a different app account restoring the same Apple
+    // ID's purchase, e.g. testing with multiple app accounts on one
+    // sandbox tester) are delivered ONLY to the destination app_user_id
+    // — RevenueCat never separately notifies the account that just LOST
+    // the entitlement. Without this, that source account's profiles.plan
+    // would stay stuck at "premium" forever after the transfer, since
+    // nothing else would ever re-check it. transferred_from lists every
+    // app_user_id losing access here, so re-sync each of those too.
+    const transferredFrom = Array.isArray(event.transferred_from) ? event.transferred_from : [];
+    for (const fromId of transferredFrom) {
+      if (fromId && fromId !== appUserId) await syncPlanForUser(fromId);
+    }
+
     if (plan === null) {
       // Unknown/unfetchable subscriber (e.g. RevenueCat's own "Send
       // Test Event" uses a fake id) — nothing to update, not an error.

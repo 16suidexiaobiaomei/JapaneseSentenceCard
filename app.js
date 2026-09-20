@@ -1748,7 +1748,7 @@
   // is enough, since Capacitor's WKWebView already opens links outside
   // the app's own origin in the system browser by default.
   function openSupportPage() {
-    window.open("https://japanesesentencecards.com/support.html", "_blank");
+    window.open("https://japanesesentencecards.com/support", "_blank");
   }
 
   function openLegalPage(path) {
@@ -4437,9 +4437,9 @@
             h(
               "div",
               { style: { marginTop: "6px", textAlign: "center", fontSize: "11.5px", color: "var(--text-faint)", paddingBottom: "14px" } },
-              h("span", { class: "tap", style: { color: "var(--text-faint)", textDecoration: "underline" }, onclick: () => openLegalPage("privacy.html") }, "Privacy Policy"),
+              h("span", { class: "tap", style: { color: "var(--text-faint)", textDecoration: "underline" }, onclick: () => openLegalPage("privacy") }, "Privacy Policy"),
               "  ·  ",
-              h("span", { class: "tap", style: { color: "var(--text-faint)", textDecoration: "underline" }, onclick: () => openLegalPage("terms.html") }, "Terms of Use")
+              h("span", { class: "tap", style: { color: "var(--text-faint)", textDecoration: "underline" }, onclick: () => openLegalPage("terms") }, "Terms of Use")
             )
           )
     );

@@ -4,5 +4,8 @@
       "maxDuration": 30,
       "includeFiles": "node_modules/kuromoji/dict/**"
     }
-  }
+  },
+  "crons": [
+    { "path": "/api/reconcile-premium", "schedule": "0 3 * * *" }
+  ]
 }

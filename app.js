@@ -1854,6 +1854,7 @@
   // payload's app_user_id is directly the profiles.id to update — no
   // separate mapping table needed.
   let purchasesConfigured = false;
+  let purchasesListenerRegistered = false;
   async function configurePurchases(userId) {
     const plugin = purchasesPlugin();
     if (!plugin || !userId) return;
@@ -1864,6 +1865,15 @@
       } else {
         await plugin.logIn({ appUserID: userId });
       }
+      // Reacts the moment the SDK itself detects an entitlement change
+      // (e.g. a subscription actually expiring while the app stays open
+      // and logged in), instead of only finding out via the next
+      // periodic syncNow() or a fresh login — registered once per app
+      // launch, not per login, since it isn't tied to a specific user.
+      if (!purchasesListenerRegistered) {
+        purchasesListenerRegistered = true;
+        plugin.addCustomerInfoUpdateListener(handleCustomerInfoUpdate);
+      }
     } catch (e) {
       console.warn("RevenueCat configure/logIn failed", e);
     }
@@ -1872,6 +1882,15 @@
   function isEntitlementActive(customerInfo) {
     const e = customerInfo && customerInfo.entitlements && customerInfo.entitlements.active && customerInfo.entitlements.active[REVENUECAT_ENTITLEMENT];
     return !!(e && e.isActive);
+  }
+
+  async function handleCustomerInfoUpdate(customerInfo) {
+    const active = isEntitlementActive(customerInfo);
+    if (active === (data.profile.plan === "premium")) return; // nothing changed
+    data.profile.plan = active ? "premium" : "free";
+    saveData();
+    render();
+    await syncPremiumWithServer();
   }
 
   // Local-only, so it can run instantly (no round trip) right after a

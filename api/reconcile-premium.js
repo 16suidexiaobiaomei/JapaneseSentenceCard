@@ -45,15 +45,28 @@ module.exports = async (req, res) => {
     }
     const rows = await listRes.json();
 
+    // A small, manually-maintained set of demo/support account ids that
+    // should keep showing Premium without needing a real RevenueCat
+    // purchase behind them — see PREMIUM_ALLOWLIST_USER_IDS in Vercel's
+    // env vars to add or remove one (comma-separated, no spaces).
+    const allowlist = new Set(
+      (process.env.PREMIUM_ALLOWLIST_USER_IDS || "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean)
+    );
+
     let checked = 0;
+    let skipped = 0;
     let revoked = 0;
     for (const row of rows) {
+      if (allowlist.has(row.id)) { skipped++; continue; }
       checked++;
       const plan = await syncPlanForUser(row.id);
       if (plan === "free") revoked++;
     }
 
-    res.status(200).json({ ok: true, checked, revoked });
+    res.status(200).json({ ok: true, checked, skipped, revoked });
   } catch (e) {
     console.error("reconcile-premium error", e);
     res.status(500).json({ error: "internal error" });

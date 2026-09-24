@@ -688,6 +688,27 @@
 
   let syncing = false;
 
+  // Supabase/PostgREST caps a single .select() at 1000 rows by default —
+  // silently, no error, just fewer rows than actually exist. Any account
+  // whose card count crosses that (bulk-imported decks, or eventually a
+  // long-time real user) would otherwise see a plain unpaginated fetch
+  // quietly truncate, which a subsequent merge could mistake for cards
+  // having been deleted elsewhere. Loop pages until one comes back
+  // short, rather than just raising the limit to some bigger fixed number.
+  const CARDS_PAGE_SIZE = 1000;
+  async function fetchAllCards(userId) {
+    const rows = [];
+    let from = 0;
+    for (;;) {
+      const { data: page, error } = await sb.from("cards").select("*").eq("user_id", userId).range(from, from + CARDS_PAGE_SIZE - 1);
+      if (error) throw error;
+      rows.push(...(page || []));
+      if (!page || page.length < CARDS_PAGE_SIZE) break;
+      from += CARDS_PAGE_SIZE;
+    }
+    return rows;
+  }
+
   async function syncNow() {
     if (syncing) return;
     syncing = true;
@@ -701,9 +722,9 @@
 
       let remoteProfile, remoteCards, remoteLog;
       try {
-        [{ data: remoteProfile }, { data: remoteCards }, { data: remoteLog }] = await Promise.all([
+        [{ data: remoteProfile }, remoteCards, { data: remoteLog }] = await Promise.all([
           sb.from("profiles").select("*").eq("id", userId).maybeSingle(),
-          sb.from("cards").select("*").eq("user_id", userId),
+          fetchAllCards(userId),
           sb.from("review_log").select("*").eq("user_id", userId),
         ]);
       } catch (e) {
@@ -1573,19 +1594,36 @@
   }
 
   // Cards created before kana/furigana existed (or added offline) never
-  // got them — catch them up quietly, a few at a time, whenever a sync
-  // completes. Sequential on purpose: this can run for a while on a
-  // large, older collection, and there's no rush — better than bursting
-  // many concurrent requests at the romaji endpoint.
+  // got them — catch them up quietly whenever a sync completes. Batched
+  // concurrency rather than fully sequential: a bulk-imported deck of a
+  // few thousand cards at one-at-a-time would take a very long time
+  // (each card is its own network round trip); a handful in flight at
+  // once meaningfully cuts wall-clock time without bursting so many
+  // concurrent requests at the romaji endpoint that it's counterproductive.
+  const BACKFILL_CONCURRENCY = 8;
   let backfillingReadings = false;
+  async function backfillOneReading(id) {
+    // Re-looked-up by id, not a captured object reference — a sync
+    // completing mid-backfill (e.g. the app being backgrounded and
+    // foregrounded again while this is running) replaces every
+    // untouched card with a freshly-built object from the server
+    // response, so a captured reference would silently look "deleted"
+    // by the time this particular id's turn comes up even though the
+    // card is very much still there.
+    const c = data.cards.find((x) => x.id === id);
+    if (!c || (c.kana && c.furigana && c.romaji)) return; // deleted, or already caught up some other way
+    const result = await generateRomaji(c.front);
+    if (!result || !result.kana) return;
+    c.romaji = result.romaji;
+    c.kana = result.kana;
+    c.furigana = result.furigana;
+    c.updatedAt = Date.now();
+    saveData();
+    await pushCard(c);
+  }
+
   async function backfillMissingReadings() {
     if (backfillingReadings) return;
-    // IDs only, not the card objects themselves — a sync completing
-    // mid-backfill (e.g. the app being backgrounded and foregrounded
-    // again while this is running) replaces every untouched card with
-    // a freshly-built object from the server response, so a captured
-    // object reference would silently look "deleted" by the next
-    // iteration even though the card is very much still there.
     // romaji is included now too — it's read-only/machine-generated for
     // every card (no more hand-editing to preserve), so a blank one is
     // exactly the same kind of gap as a blank kana/furigana.
@@ -1593,17 +1631,9 @@
     if (!ids.length) return;
     backfillingReadings = true;
     try {
-      for (const id of ids) {
-        const c = data.cards.find((x) => x.id === id);
-        if (!c || (c.kana && c.furigana && c.romaji)) continue; // deleted, or already caught up some other way
-        const result = await generateRomaji(c.front);
-        if (!result || !result.kana) continue;
-        c.romaji = result.romaji;
-        c.kana = result.kana;
-        c.furigana = result.furigana;
-        c.updatedAt = Date.now();
-        saveData();
-        await pushCard(c);
+      for (let i = 0; i < ids.length; i += BACKFILL_CONCURRENCY) {
+        const batch = ids.slice(i, i + BACKFILL_CONCURRENCY);
+        await Promise.all(batch.map((id) => backfillOneReading(id)));
       }
     } finally {
       backfillingReadings = false;

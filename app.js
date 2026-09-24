@@ -1881,6 +1881,33 @@
     return (typeof Capacitor !== "undefined" && Capacitor.isNativePlatform && Capacitor.isNativePlatform() && Capacitor.Plugins && Capacitor.Plugins.Purchases) || null;
   }
 
+  function appPlugin() {
+    return (typeof Capacitor !== "undefined" && Capacitor.isNativePlatform && Capacitor.isNativePlatform() && Capacitor.Plugins && Capacitor.Plugins.App) || null;
+  }
+
+  // Universal Links (https://japanesesentencecards.com/tag/<id>) land
+  // here — used for in-app-event deep links straight to a specific
+  // Community tag. Kept deliberately simple: if there's no session yet,
+  // just ask the user to log in rather than queuing the link to resume
+  // afterward — a rare enough case (this mostly reaches people who
+  // already use the app) that a "resume after login" flow isn't worth
+  // the added complexity yet.
+  async function handleDeepLink(url) {
+    try {
+      const path = new URL(url).pathname;
+      const match = path.match(/^\/tag\/([^/]+)/);
+      if (!match) return;
+      const tagId = decodeURIComponent(match[1]);
+      const session = await getSessionSafe();
+      if (!session) { alert("Log in to view this shared tag."); return; }
+      const { data: row } = await sb.from("shared_tags").select("*").eq("id", tagId).eq("status", "active").maybeSingle();
+      if (!row) { alert("This tag isn't available anymore."); return; }
+      await openTagDetail(row);
+    } catch (e) {
+      console.warn("deep link handling failed", e);
+    }
+  }
+
   // Configured once per app lifetime, then just logged in on subsequent
   // calls (e.g. signing into a different account without a full reload)
   // — RevenueCat's own guidance is to call configure() only once. The
@@ -4600,6 +4627,8 @@
   // ---------------------------------------------------------------------
 
   render(); // "boot" screen while we check for a session
+
+  { const app = appPlugin(); if (app) app.addListener("appUrlOpen", (data) => handleDeepLink(data.url)); }
 
   sb.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_OUT" && ui.screen !== "auth" && ui.screen !== "boot") resetToAuthScreen();

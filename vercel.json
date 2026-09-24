@@ -8,5 +8,14 @@
   },
   "crons": [
     { "path": "/api/reconcile-premium", "schedule": "0 3 * * *" }
+  ],
+  "rewrites": [
+    { "source": "/tag/:id", "destination": "/tag-fallback.html" }
+  ],
+  "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+    }
   ]
 }

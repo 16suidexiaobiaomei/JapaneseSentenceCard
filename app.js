@@ -974,7 +974,11 @@
     const pool = practice ? cardsMatchingTags(tags) : dueCards(tags);
     const queue = pool.slice().sort((a, b) => a.dueAt - b.dueAt).slice(0, SESSION_SIZE).map((c) => c.id);
     if (!queue.length) return;
-    ui.session = { queue, qi: 0, flipped: false, tags: tags.length ? tags : ["all tags"], results: { again: 0, good: 0 }, practice: !!practice };
+    // filterTags keeps the raw scope (e.g. [] for "all") so a "Continue"
+    // action after this session can start another one in the exact same
+    // scope — tags below is display-only ("all tags" as a readable
+    // label), and can't be fed back into another beginSession() call.
+    ui.session = { queue, qi: 0, flipped: false, filterTags: tags, tags: tags.length ? tags : ["all tags"], results: { again: 0, good: 0 }, practice: !!practice };
     ui.screen = "review";
     render();
     if (AUTOPLAY_AUDIO) setTimeout(() => playCardAudio(currentCard()), 250);
@@ -2902,6 +2906,12 @@
 
   function screenDone() {
     const s = ui.session;
+    // Same scope the just-finished session used (all tags, or a specific
+    // one) — re-checked fresh, not just "queue.length again", since
+    // answering cards just rescheduled them and a "Didn't remember" card
+    // already came back into this same due pool.
+    const remaining = (s.practice ? cardsMatchingTags(s.filterTags) : dueCards(s.filterTags)).length;
+    const secondaryBtn = (label, onclick) => h("div", { class: "tap", style: { marginTop: "10px", padding: "16px", borderRadius: "14px", textAlign: "center", border: "1px solid rgba(250,249,245,.16)", color: "#faf9f5", fontSize: "15px" }, onclick }, label);
     return h(
       "div",
       { style: { minHeight: "100%", background: "#141413", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top, 0px) + 56px) 24px 40px" } },
@@ -2919,8 +2929,15 @@
         "Cards you didn't remember come back for a quick retry soon. The rest are scheduled by FSRS based on how well you know each one — " + dueCards(null).length + " cards still due today."
       ),
       h("div", { style: { flex: "1" } }),
-      h("div", { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", background: "#c96442", color: "#faf9f5", fontSize: "15px", fontWeight: "500" }, onclick: () => go("home") }, "Back to today"),
-      h("div", { class: "tap", style: { marginTop: "10px", padding: "16px", borderRadius: "14px", textAlign: "center", border: "1px solid rgba(250,249,245,.16)", color: "#faf9f5", fontSize: "15px" }, onclick: () => { ui.sel = []; go("tags"); } }, "Review other tags")
+      remaining > 0
+        ? h("div", { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", background: "#c96442", color: "#faf9f5", fontSize: "15px", fontWeight: "500" }, onclick: () => beginSession(s.filterTags, s.practice) }, "Continue reviewing · " + remaining + " more")
+        : null,
+      remaining > 0
+        ? [secondaryBtn("Back to today", () => go("home")), secondaryBtn("Review other tags", () => { ui.sel = []; go("tags"); })]
+        : [
+            h("div", { class: "tap", style: { padding: "16px", borderRadius: "14px", textAlign: "center", background: "#c96442", color: "#faf9f5", fontSize: "15px", fontWeight: "500" }, onclick: () => go("home") }, "Back to today"),
+            secondaryBtn("Review other tags", () => { ui.sel = []; go("tags"); }),
+          ]
     );
   }
 

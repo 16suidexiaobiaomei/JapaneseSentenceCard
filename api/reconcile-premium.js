@@ -43,30 +43,28 @@ module.exports = async (req, res) => {
       res.status(500).json({ error: "failed to list premium profiles" });
       return;
     }
-    const rows = await listRes.json();
+    const ids = new Set(rows.map((r) => r.id));
 
-    // A small, manually-maintained set of demo/support account ids that
-    // should keep showing Premium without needing a real RevenueCat
-    // purchase behind them — see PREMIUM_ALLOWLIST_USER_IDS in Vercel's
-    // env vars to add or remove one (comma-separated, no spaces).
-    const allowlist = new Set(
-      (process.env.PREMIUM_ALLOWLIST_USER_IDS || "")
-        .split(",")
-        .map((id) => id.trim())
-        .filter(Boolean)
-    );
-
-    let checked = 0;
-    let skipped = 0;
-    let revoked = 0;
-    for (const row of rows) {
-      if (allowlist.has(row.id)) { skipped++; continue; }
-      checked++;
-      const plan = await syncPlanForUser(row.id);
-      if (plan === "free") revoked++;
+    // Also sweep every allowlisted id even if it's NOT currently marked
+    // premium — self-healing, so one that's wrongly sitting at "free"
+    // (e.g. from before it was added to the list, or any future gap)
+    // gets corrected here too, not just protected once it's already
+    // right. syncPlanForUser() itself handles what "allowlisted" means.
+    for (const id of (process.env.PREMIUM_ALLOWLIST_USER_IDS || "").split(",").map((id) => id.trim()).filter(Boolean)) {
+      ids.add(id);
     }
 
-    res.status(200).json({ ok: true, checked, skipped, revoked });
+    let checked = 0;
+    let premium = 0;
+    let revoked = 0;
+    for (const id of ids) {
+      checked++;
+      const plan = await syncPlanForUser(id);
+      if (plan === "premium") premium++;
+      else if (plan === "free") revoked++;
+    }
+
+    res.status(200).json({ ok: true, checked, premium, revoked });
   } catch (e) {
     console.error("reconcile-premium error", e);
     res.status(500).json({ error: "internal error" });

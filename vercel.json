@@ -10,7 +10,7 @@
     { "path": "/api/reconcile-premium", "schedule": "0 3 * * *" }
   ],
   "rewrites": [
-    { "source": "/tag/:id", "destination": "/tag-fallback.html" }
+    { "source": "/tag/:id", "destination": "/tag-fallback" }
   ],
   "headers": [
     {

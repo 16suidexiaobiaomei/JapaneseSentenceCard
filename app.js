@@ -171,6 +171,10 @@
       profile: { username: "", photo: null, plan: "free", showRomajiOnFront: false, showFuriganaOnFront: false, showRomajiOnBack: true, showFuriganaOnBack: true },
       totalActiveMs: 0,
       theme: "system", // "light" | "dark" | "system" — device-local, not synced (see applyTheme())
+      // Device-local, not synced — a local notification is scheduled on
+      // this specific device, so a synced preference would be misleading
+      // on any other device that's never actually scheduled it.
+      reminder: { enabled: false, hour: 20, minute: 0 },
     };
   }
 
@@ -194,6 +198,10 @@
       if (typeof parsed.profile.showFuriganaOnBack !== "boolean") parsed.profile.showFuriganaOnBack = true;
       if (typeof parsed.totalActiveMs !== "number") parsed.totalActiveMs = 0;
       if (parsed.theme !== "light" && parsed.theme !== "dark" && parsed.theme !== "system") parsed.theme = "system";
+      if (!parsed.reminder || typeof parsed.reminder !== "object") parsed.reminder = {};
+      if (typeof parsed.reminder.enabled !== "boolean") parsed.reminder.enabled = false;
+      if (typeof parsed.reminder.hour !== "number") parsed.reminder.hour = 20;
+      if (typeof parsed.reminder.minute !== "number") parsed.reminder.minute = 0;
       if (typeof parsed.userId !== "string") parsed.userId = null;
       if (!Array.isArray(parsed.pendingDeletes)) parsed.pendingDeletes = [];
       parsed.cards.forEach((c) => {
@@ -1906,6 +1914,59 @@
     } catch (e) {
       console.warn("deep link handling failed", e);
     }
+  }
+
+  function localNotificationsPlugin() {
+    return (typeof Capacitor !== "undefined" && Capacitor.isNativePlatform && Capacitor.isNativePlatform() && Capacitor.Plugins && Capacitor.Plugins.LocalNotifications) || null;
+  }
+
+  // Fixed id: there's only ever one reminder, so re-scheduling always
+  // replaces it rather than accumulating duplicates.
+  const REMINDER_NOTIFICATION_ID = 1;
+
+  async function applyReminderSchedule() {
+    const plugin = localNotificationsPlugin();
+    if (!plugin) return; // web — nothing to schedule
+    await plugin.cancel({ notifications: [{ id: REMINDER_NOTIFICATION_ID }] });
+    if (!data.reminder.enabled) return;
+    await plugin.schedule({
+      notifications: [
+        {
+          id: REMINDER_NOTIFICATION_ID,
+          title: "Time to study!",
+          body: "Keep your streak going — review a few Japanese sentences today.",
+          schedule: { on: { hour: data.reminder.hour, minute: data.reminder.minute }, repeats: true },
+        },
+      ],
+    });
+  }
+
+  async function setReminderEnabled(enabled) {
+    const plugin = localNotificationsPlugin();
+    if (!plugin) {
+      if (enabled) alert("Reminders are only available in the iOS app.");
+      return;
+    }
+    if (enabled) {
+      let status = await plugin.checkPermissions();
+      if (status.display !== "granted") status = await plugin.requestPermissions();
+      if (status.display !== "granted") {
+        alert("Notifications are turned off for this app. Enable them in Settings to get a daily reminder.");
+        return;
+      }
+    }
+    data.reminder.enabled = enabled;
+    saveData();
+    render();
+    await applyReminderSchedule();
+  }
+
+  async function setReminderTime(hour, minute) {
+    data.reminder.hour = hour;
+    data.reminder.minute = minute;
+    saveData();
+    render();
+    if (data.reminder.enabled) await applyReminderSchedule();
   }
 
   // Configured once per app lifetime, then just logged in on subsequent
@@ -4172,6 +4233,7 @@
         ),
 
         settingsCard(
+          ...[
           settingsRow(
             "Membership",
             [
@@ -4199,6 +4261,22 @@
             ),
             null
           ),
+          settingsRow("Daily reminder", onOffPill(data.reminder.enabled, setReminderEnabled), null),
+          data.reminder.enabled
+            ? settingsRow(
+                "Remind me at",
+                h("input", {
+                  type: "time",
+                  value: String(data.reminder.hour).padStart(2, "0") + ":" + String(data.reminder.minute).padStart(2, "0"),
+                  style: { border: "none", background: "transparent", color: "var(--text-primary)", fontSize: "15px", fontFamily: "inherit" },
+                  onchange: (e) => {
+                    const parts = e.target.value.split(":").map(Number);
+                    if (!isNaN(parts[0]) && !isNaN(parts[1])) setReminderTime(parts[0], parts[1]);
+                  },
+                }),
+                null
+              )
+            : null,
           settingsRow(
             "Advanced settings",
             data.profile.plan === "premium"
@@ -4221,7 +4299,8 @@
               chevronNode(),
             ],
             copySupportEmail
-          )
+          ),
+          ].filter(Boolean)
         ),
 
         settingsCard(

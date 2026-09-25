@@ -1935,6 +1935,9 @@
           id: REMINDER_NOTIFICATION_ID,
           title: "Time to study!",
           body: "Keep your streak going — review a few Japanese sentences today.",
+          // Without this, iOS delivers the notification silently — unlike
+          // Android, it does NOT fall back to a default sound on its own.
+          sound: "default",
           schedule: { on: { hour: data.reminder.hour, minute: data.reminder.minute }, repeats: true },
         },
       ],
@@ -4265,15 +4268,25 @@
           data.reminder.enabled
             ? settingsRow(
                 "Remind me at",
-                h("input", {
-                  type: "time",
-                  value: String(data.reminder.hour).padStart(2, "0") + ":" + String(data.reminder.minute).padStart(2, "0"),
-                  style: { border: "none", background: "transparent", color: "var(--text-primary)", fontSize: "15px", fontFamily: "inherit" },
-                  onchange: (e) => {
-                    const parts = e.target.value.split(":").map(Number);
-                    if (!isNaN(parts[0]) && !isNaN(parts[1])) setReminderTime(parts[0], parts[1]);
-                  },
-                }),
+                (() => {
+                  // Deliberately not committed/re-rendered on every change
+                  // (like the free-text fields elsewhere) — re-rendering
+                  // mid-interaction would tear down and rebuild this very
+                  // <input>, which yanks focus out from under the native
+                  // time picker and closes it the instant just the hour
+                  // (not yet the minute) has been scrolled.
+                  let draft = String(data.reminder.hour).padStart(2, "0") + ":" + String(data.reminder.minute).padStart(2, "0");
+                  return h("input", {
+                    type: "time",
+                    value: draft,
+                    style: { border: "none", background: "transparent", color: "var(--text-primary)", fontSize: "15px", fontFamily: "inherit" },
+                    oninput: (e) => { draft = e.target.value; },
+                    onblur: () => {
+                      const parts = draft.split(":").map(Number);
+                      if (!isNaN(parts[0]) && !isNaN(parts[1])) setReminderTime(parts[0], parts[1]);
+                    },
+                  });
+                })(),
                 null
               )
             : null,

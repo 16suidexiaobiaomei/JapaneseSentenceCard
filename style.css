@@ -87,6 +87,12 @@ html, body {
   -webkit-font-smoothing: antialiased;
   height: 100%;
   -webkit-tap-highlight-color: transparent; /* replaced by the .tap:active press effect below */
+  /* The serif font's default old-style (non-lining) figures vary in
+     height/baseline (e.g. 4/7/9 dip below the baseline) — fine for
+     flowing text, but makes a stat like "4088" look uneven digit to
+     digit. Lining + tabular forces uniform, same-width digits
+     everywhere, including inside var(--serif) text. */
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 body { min-height: 100dvh; }

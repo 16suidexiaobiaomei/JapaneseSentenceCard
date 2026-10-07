@@ -2614,7 +2614,7 @@
 
     if (a.mode === "verify") {
       title = "Check your email.";
-      subtitle = "We sent a confirmation link to " + a.pendingEmail + ". Open it, then come back here and tap the button below — even if the link itself shows an error page, your account will already be confirmed and ready to use.";
+      subtitle = "We sent a confirmation link to " + a.pendingEmail + ". Check your inbox — and your Spam or Junk folder, just in case. Open the link, then come back here and tap the button below — even if the link itself shows an error page, your account will already be confirmed and ready to use.";
       body = [
         authButton("I've confirmed — check again", "Checking…", true, a.busy, checkIfConfirmed),
         errorNode,

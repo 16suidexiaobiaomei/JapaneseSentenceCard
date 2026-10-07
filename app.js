@@ -618,11 +618,22 @@
   async function pushCardsBulk(cards) {
     if (!cards.length) return;
     const session = await getSessionSafe();
-    if (!session) return;
+    if (!session) {
+      // Previously a silent no-op — this is the exact seed-deck push
+      // right after signup, where a session-not-ready race would have
+      // looked identical to "it worked" (cards stayed in local state,
+      // nothing ever reached the server, no error anywhere).
+      console.warn("pushCardsBulk: no session yet, skipping push of", cards.length, "cards");
+      return;
+    }
     try {
       const rows = cards.map((c) => cardToRow(c, session.user.id));
       const { data: savedRows, error } = await sb.from("cards").upsert(rows).select();
-      if (!error && savedRows) {
+      if (error) {
+        console.warn("pushCardsBulk rejected", error);
+        return;
+      }
+      if (savedRows) {
         const byId = new Map(savedRows.map((r) => [r.id, r]));
         cards.forEach((c) => { const r = byId.get(c.id); if (r) c.updatedAt = new Date(r.updated_at).getTime(); });
       }

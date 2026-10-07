@@ -145,8 +145,19 @@
     return {
       userId: null, // whose account this cached blob belongs to (see enterApp)
       pendingDeletes: [], // card ids deleted locally but not yet confirmed deleted in the cloud
+      // cards.id is a GLOBAL primary key, not scoped per user — a fixed
+      // "seed-"+i id here meant every account's starter deck tried to
+      // claim the exact same row ids as every other account's. The
+      // first account ever to do so succeeded; every account after that
+      // collided on the primary key, turning their "new" insert into an
+      // UPDATE of a DIFFERENT user's existing row — which Supabase's own
+      // RLS correctly rejects (42501, "new row violates row-level
+      // security policy (USING expression)"), silently losing the whole
+      // starter deck server-side while it still looked fine locally.
+      // Scoping the id to this specific generation (not just the
+      // in-deck index) makes every account's seed ids unique.
       cards: SEED_CARDS.map((c, i) => ({
-        id: "seed-" + i,
+        id: "seed-" + now + "-" + i,
         front: c[0],
         romaji: c[1],
         back: c[2],

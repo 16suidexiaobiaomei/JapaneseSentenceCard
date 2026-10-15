@@ -4819,6 +4819,11 @@
     if (session) {
       await enterApp(session);
     } else {
+      // The marketing site's "Start now" links to /login?mode=signup so a
+      // new visitor lands straight on the sign-up form instead of login —
+      // checked once here rather than threading a query-string read
+      // through every other place the auth screen can be shown.
+      if (new URLSearchParams(location.search).get("mode") === "signup") ui.auth.mode = "signup";
       ui.screen = "auth";
       render();
     }

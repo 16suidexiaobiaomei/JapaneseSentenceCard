@@ -37,13 +37,20 @@ a { color: inherit; text-decoration: none; }
   display: flex; align-items: center; gap: 28px;
 }
 .nav .brand { display: flex; align-items: center; gap: 11px; margin-right: auto; }
-/* Two-tone lettermark: a dark "Aa" tile top-right overlapping an accent
-   "語" tile bottom-left, exactly as in the source design (web_design/) —
-   proportions and colors taken directly from its decoded markup. */
-.nav .mark { position: relative; width: 34px; height: 34px; flex-shrink: 0; }
-.nav .mark i { position: absolute; width: 23px; height: 21px; border-radius: 3px; display: flex; font-style: normal; box-sizing: border-box; }
-.nav .mark i:first-child { top: 0; right: 0; background: #3a3936; align-items: flex-start; justify-content: flex-end; padding: 2px 3px; font-family: var(--serif); font-weight: 500; font-size: 8px; color: #b0aea5; }
-.nav .mark i:last-child { bottom: 0; left: 0; background: var(--accent-2); align-items: center; justify-content: center; font-family: var(--jp); font-weight: 500; font-size: 10px; color: #f5f4ed; }
+/* Two-tone lettermark on a solid black icon tile — a dark-gray "Aa" tile
+   top-right overlapping an accent "語" tile bottom-left, both inset with
+   visible black margin around them, exactly as in the source design
+   (web_design/) — proportions and colors taken directly from its decoded
+   markup (a 240x240 black square at 0.1417 scale containing a centered
+   166x130 two-tile cluster). */
+.nav .mark {
+  width: 34px; height: 34px; border-radius: 9px; background: #141413; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.nav .mark-inner { position: relative; width: 24px; height: 18px; }
+.nav .mark-inner i { position: absolute; width: 16px; height: 12px; border-radius: 2px; display: flex; font-style: normal; box-sizing: border-box; }
+.nav .mark-inner i:first-child { top: 0; right: 0; background: #3a3936; align-items: flex-start; justify-content: flex-end; padding: 1px 2px; font-family: var(--serif); font-weight: 500; font-size: 6px; color: #b0aea5; }
+.nav .mark-inner i:last-child { bottom: 0; left: 0; background: var(--accent-2); align-items: center; justify-content: center; font-family: var(--jp); font-weight: 500; font-size: 7px; color: #f5f4ed; }
 .nav .word { font-family: var(--serif); font-size: 13px; line-height: 1.25; font-weight: 600; letter-spacing: -.2px; }
 .nav .links { display: flex; gap: 22px; font-size: 14px; color: var(--muted); }
 .nav .links a:hover { color: var(--text); }
@@ -51,10 +58,10 @@ a { color: inherit; text-decoration: none; }
 .nav .login-link { font-size: 14px; color: var(--muted); }
 .nav .login-link:hover { color: var(--text); }
 .nav .cta {
-  padding: 10px 20px; border-radius: 9999px; background: var(--dark); color: var(--cream);
+  padding: 10px 20px; border-radius: 9999px; background: var(--accent); color: #faf9f5;
   font-size: 13.5px; font-weight: 500;
 }
-.nav .cta:hover { background: var(--dark-2); }
+.nav .cta:hover { background: var(--accent-2); }
 @media (max-width: 760px) {
   .nav .links { display: none; }
 }
@@ -130,11 +137,20 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .phone-actions .good { background: var(--accent); color: #faf9f5; }
 
 /* ---------------------------------------------------------------------
-   "One account, two channels" strip
+   Hero device showcase — browser mockup (web channel) layered behind the
+   phone mockup (iOS), matching the source design's composition; the
+   "one account, two channels" caption and CTAs sit directly underneath,
+   inside the same hero column — not a separate section below the hero.
    --------------------------------------------------------------------- */
-.channels { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; text-align: center; }
-.channels p { font-size: 14.5px; color: var(--muted); margin: 0 0 20px; }
-.channel-ctas { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.hero-mock-wrap { position: relative; width: 100%; max-width: 420px; margin: 0 auto; }
+.hero-mock-wrap .browser-frame { width: 100%; }
+.hero-mock-wrap .phone-frame { position: absolute; right: -8%; bottom: -8%; width: 46%; max-width: none; box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.06); }
+.hero-channels { margin-top: 28px; }
+.hero-channels p { font-size: 13.5px; color: var(--muted); margin: 0 0 16px; }
+.hero-channel-ctas { display: flex; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 860px) {
+  .hero-mock-wrap { max-width: 320px; }
+}
 
 /* ---------------------------------------------------------------------
    Dark Community showcase
@@ -193,13 +209,18 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .showcase { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; display: grid; grid-template-columns: .95fr 1.05fr; gap: 56px; align-items: center; }
 .showcase .col { display: none; }
 .showcase .col.on { display: block; }
+/* Each mockup needs its own display type when shown (phone-frame is a flex
+   column, browser-frame is a plain block) — a single shared ".mock.on"
+   rule would win over phone-frame's own "display:flex" by specificity
+   (two classes beats one) and silently break its whole internal layout. */
 .showcase .mock { display: none; }
-.showcase .mock.on { display: block; }
+#mock-ios.on { display: flex; }
+#mock-web.on { display: block; }
 .showcase h2 { font-size: 28px; }
 .showcase .sub { margin: 14px 0 22px; font-size: 15px; color: var(--muted); line-height: 1.65; }
 .feat-list { list-style: none; margin: 0 0 26px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.feat-list li { font-size: 14.5px; color: var(--text); display: flex; align-items: center; gap: 9px; }
-.feat-list li::before { content: ""; width: 6px; height: 6px; border-radius: 9999px; background: var(--accent); flex-shrink: 0; }
+.feat-list li { font-size: 14.5px; color: var(--text); display: flex; align-items: center; gap: 11px; }
+.feat-list li svg { flex-shrink: 0; }
 @media (max-width: 860px) {
   .showcase { grid-template-columns: 1fr; }
   .showcase .mockwrap { order: -1; }

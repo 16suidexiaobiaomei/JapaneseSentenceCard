@@ -36,11 +36,14 @@ a { color: inherit; text-decoration: none; }
   max-width: 1120px; margin: 0 auto; padding: 18px 24px;
   display: flex; align-items: center; gap: 28px;
 }
-.nav .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
-.nav .mark { position: relative; width: 30px; height: 30px; flex-shrink: 0; }
-.nav .mark i { position: absolute; width: 18px; height: 18px; border-radius: 6px; }
-.nav .mark i:first-child { top: 0; right: 0; background: var(--dark); }
-.nav .mark i:last-child { bottom: 0; left: 0; background: var(--accent); }
+.nav .brand { display: flex; align-items: center; gap: 11px; margin-right: auto; }
+/* Two-tone lettermark: a dark "Aa" tile top-right overlapping an accent
+   "語" tile bottom-left, exactly as in the source design (web_design/) —
+   proportions and colors taken directly from its decoded markup. */
+.nav .mark { position: relative; width: 34px; height: 34px; flex-shrink: 0; }
+.nav .mark i { position: absolute; width: 23px; height: 21px; border-radius: 3px; display: flex; font-style: normal; box-sizing: border-box; }
+.nav .mark i:first-child { top: 0; right: 0; background: #3a3936; align-items: flex-start; justify-content: flex-end; padding: 2px 3px; font-family: var(--serif); font-weight: 500; font-size: 8px; color: #b0aea5; }
+.nav .mark i:last-child { bottom: 0; left: 0; background: var(--accent-2); align-items: center; justify-content: center; font-family: var(--jp); font-weight: 500; font-size: 10px; color: #f5f4ed; }
 .nav .word { font-family: var(--serif); font-size: 13px; line-height: 1.25; font-weight: 600; letter-spacing: -.2px; }
 .nav .links { display: flex; gap: 22px; font-size: 14px; color: var(--muted); }
 .nav .links a:hover { color: var(--text); }
@@ -100,25 +103,28 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
   .hero h1 { font-size: 36px; }
 }
 
-/* Simplified phone mockup — a clean static recreation of the real review
-   card, not a pixel clone of the interactive design mockup. */
+/* Phone mockup — matches the real review-screen proportions used in the
+   source design (a 306x663 bezel wrapping a 393x852 iPhone screen, i.e.
+   aspect-ratio ~1:2.17 — tall and narrow, not a stubby rounded square). */
 .phone-frame {
-  background: var(--dark); border-radius: 36px; padding: 18px 16px 22px;
-  max-width: 320px; margin: 0 auto; box-shadow: 0 30px 70px rgba(0,0,0,.22);
+  background: var(--dark); border-radius: 13%/6%; padding: 7% 6% 8%;
+  width: 100%; max-width: 306px; aspect-ratio: 306 / 663;
+  margin: 0 auto; box-shadow: 0 30px 70px rgba(0,0,0,.22);
+  display: flex; flex-direction: column; box-sizing: border-box;
 }
-.phone-topbar { display: flex; align-items: center; gap: 10px; color: #faf9f5; margin-bottom: 16px; }
-.phone-topbar .dot-close { width: 26px; height: 26px; border-radius: 9999px; background: rgba(250,249,245,.1); display: flex; align-items: center; justify-content: center; font-size: 11px; }
+.phone-topbar { display: flex; align-items: center; gap: 10px; color: #faf9f5; margin-bottom: 5%; flex: none; }
+.phone-topbar .dot-close { width: 26px; height: 26px; border-radius: 9999px; background: rgba(250,249,245,.1); display: flex; align-items: center; justify-content: center; font-size: 11px; flex: none; }
 .phone-topbar .progress { flex: 1; height: 4px; border-radius: 9999px; background: rgba(250,249,245,.13); overflow: hidden; }
 .phone-topbar .progress i { display: block; height: 100%; background: var(--accent); }
 .phone-topbar .count { font-size: 11px; color: #b0aea5; }
-.review-card { background: var(--card-bg); border-radius: 22px; padding: 28px 20px; min-height: 240px; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.review-card { background: var(--card-bg); border-radius: 22px; padding: 24px 20px; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 10px; position: relative; }
 .review-card .jp { font-family: var(--jp); font-size: 22px; color: var(--text); }
 .review-card .jp rt { font-size: .5em; }
 .review-card .romaji { font-size: 12.5px; color: var(--muted); }
-.card-foot { margin-top: auto; padding-top: 24px; display: flex; align-items: center; justify-content: space-between; }
+.card-foot { position: absolute; left: 20px; right: 20px; bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
 .play-pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px; border-radius: 9999px; background: #f5f4ed; font-size: 11px; color: var(--muted); }
 .tapflip { font-size: 11px; color: var(--muted-3); }
-.phone-actions { display: flex; gap: 8px; margin-top: 14px; }
+.phone-actions { display: flex; gap: 8px; margin-top: 5%; flex: none; }
 .phone-actions span { flex: 1; text-align: center; padding: 13px 6px; border-radius: 12px; font-size: 13px; font-weight: 500; }
 .phone-actions .again { background: rgba(250,249,245,.06); border: 1px solid rgba(250,249,245,.16); color: #faf9f5; }
 .phone-actions .good { background: var(--accent); color: #faf9f5; }
@@ -133,19 +139,21 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 /* ---------------------------------------------------------------------
    Dark Community showcase
    --------------------------------------------------------------------- */
-.community { background: var(--dark); color: #faf9f5; padding: 72px 24px; }
-.community > * { max-width: 1120px; margin-left: auto; margin-right: auto; }
-.community h2 { font-size: 32px; color: #faf9f5; max-width: 20ch; }
-.community .sub.light { color: #b0aea5; max-width: 50ch; margin: 14px auto 36px; }
-.tag-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-.tag-card { background: var(--dark-2); border: 1px solid var(--dark-3); border-radius: 16px; padding: 18px; text-align: left; }
-.tag-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
-.tag-name { font-size: 14.5px; font-weight: 500; color: #faf9f5; }
-.tag-lang { font-size: 10.5px; padding: 3px 8px; border-radius: 9999px; background: rgba(250,249,245,.08); color: #b0aea5; white-space: nowrap; }
-.tag-by { font-size: 12px; color: #87867f; margin-bottom: 10px; }
-.tag-meta { font-size: 11.5px; color: var(--accent-2); }
+.community { background: var(--dark); color: #faf9f5; padding: 64px 48px; }
+.community-inner { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 34px; }
+.community-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; }
+.community h2 { font-size: 38px; color: #faf9f5; max-width: 520px; margin: 0; }
+.community .sub.light { color: #b0aea5; max-width: 380px; font-size: 16.5px; margin: 0; }
+.tag-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.tag-card { background: #1f1f1d; border: 1px solid #30302e; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.tag-card .tag-name { font-family: var(--serif); font-size: 19px; color: #faf9f5; }
+.tag-card .tag-by { font-size: 12.5px; color: #87867f; }
+.tag-card .tag-lang { align-self: flex-start; font-size: 11.5px; padding: 3px 10px; border-radius: 9999px; background: #30302e; color: #f5f4ed; }
+.tag-card .tag-cards { font-size: 12.5px; color: #b0aea5; margin-top: 8px; }
+.tag-card .tag-downloads { font-size: 12.5px; color: var(--accent-2); font-weight: 500; }
 @media (max-width: 860px) {
   .tag-grid { grid-template-columns: repeat(2, 1fr); }
+  .community-head { flex-direction: column; align-items: flex-start; gap: 16px; }
   .community h2 { font-size: 26px; }
 }
 
@@ -160,12 +168,9 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .foot-col h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-3); margin: 0 0 12px; font-weight: 500; }
 .foot-col a { display: block; font-size: 13.5px; color: var(--muted); margin-bottom: 9px; }
 .foot-col a:hover { color: var(--text); }
-.foot-brand { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 10px; }
-.foot-brand .badge {
-  width: 32px; height: 32px; border-radius: 10px; background: var(--accent); color: #faf9f5;
-  font-family: var(--serif); font-weight: 600; font-size: 12px; display: flex; align-items: center; justify-content: center;
-}
-.foot-brand p { font-size: 12px; color: var(--muted-3); margin: 0; }
+.foot-brand { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 4px; }
+.foot-brand span { font-size: 13.5px; color: var(--muted); }
+.foot-brand p { font-size: 13.5px; color: var(--muted-2); margin: 0; }
 @media (max-width: 760px) {
   .foot { grid-template-columns: repeat(2, 1fr); }
   .foot-brand { grid-column: span 2; align-items: flex-start; }
@@ -258,3 +263,20 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 @media (max-width: 760px) {
   .trust { grid-template-columns: 1fr; }
 }
+
+/* ---------------------------------------------------------------------
+   Content pages — Support / Terms / Privacy
+   --------------------------------------------------------------------- */
+.legal-wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
+.legal-wrap .ovl { margin-top: 4px; }
+.legal-wrap h1 { font-size: 32px; margin: 4px 0 6px; }
+.legal-wrap .updated { font-size: 13px; color: var(--muted-3); margin-bottom: 40px; }
+.legal-wrap .lede { font-size: 15.5px; color: var(--muted); margin-bottom: 36px; }
+.legal-wrap h2 { font-family: var(--serif); font-size: 20px; margin: 40px 0 10px; }
+.legal-wrap p, .legal-wrap li { font-size: 15px; line-height: 1.7; color: var(--muted); }
+.legal-wrap ul { padding-left: 20px; }
+.legal-wrap .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 18px 22px; margin-bottom: 16px; }
+.legal-wrap .card:last-of-type { margin-bottom: 0; }
+.legal-wrap .contact { background: var(--dark); color: #faf9f5; border-radius: 16px; padding: 24px; margin-top: 32px; }
+.legal-wrap .contact h2 { color: #faf9f5; margin-top: 0; }
+.legal-wrap .contact a { color: var(--accent-2); }

@@ -6,40 +6,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f5f4ed">
 <link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --cream: #f5f4ed;
-    --card-bg: #faf9f5;
-    --border: #e6e3d8;
-    --dark: #141413;
-    --accent: #c96442;
-    --muted: #5e5d59;
-    --muted-2: #b0aea5;
-    --serif: 'Source Serif 4', Georgia, serif;
-    --sans: Geist, system-ui, sans-serif;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--cream); font-family: var(--sans); color: var(--dark); }
-  a { color: var(--accent); }
-  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 24px 80px; }
-  .badge { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: var(--accent); color: #faf9f5; font-family: var(--serif); font-weight: 600; font-size: 13px; }
-  .eyebrow { margin-top: 18px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted-2); }
-  h1 { margin: 4px 0 6px; font-family: var(--serif); font-size: 32px; letter-spacing: -.3px; }
-  .updated { font-size: 13px; color: var(--muted-2); margin-bottom: 40px; }
-  h2 { font-family: var(--serif); font-size: 20px; margin: 40px 0 10px; }
-  p, li { font-size: 15px; line-height: 1.7; color: var(--muted); }
-  ul { padding-left: 20px; }
-  .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 20px 22px; margin-top: 12px; }
-  .back { display: inline-block; margin-top: 48px; font-size: 13px; color: var(--muted); }
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=Geist:wght@300;400;500;600&family=Noto+Serif+JP:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="marketing.css">
 </head>
 <body>
-<div class="wrap">
-  <div class="badge">JSC</div>
-  <div class="eyebrow">Japanese Sentence Card</div>
+
+<header class="nav">
+  <a class="brand" href="/">
+    <span class="mark"><i>Aa</i><i>語</i></span>
+    <span class="word">Japanese<br>Sentence Card</span>
+  </a>
+  <nav class="links">
+    <a href="/">Home</a>
+    <a href="/product">Product</a>
+    <a href="/pricing">Pricing</a>
+    <a href="/support">Support</a>
+  </nav>
+  <div class="nav-actions">
+    <a class="login-link" href="/login">Log in</a>
+    <a class="cta" href="/login">Start now</a>
+  </div>
+</header>
+
+<main class="legal-wrap">
+  <div class="ovl">Japanese Sentence Card</div>
   <h1>Privacy Policy</h1>
   <div class="updated">Last updated September 19, 2026</div>
 
@@ -81,8 +74,34 @@
 
   <h2>Contact</h2>
   <p>Questions about this policy or your data can be sent to <a href="mailto:support@japanesesentencecards.com">support@japanesesentencecards.com</a>.</p>
+</main>
 
-  <a class="back" href="/">← Back to Japanese Sentence Card</a>
-</div>
+<footer class="foot">
+  <div class="foot-col">
+    <h3>Product</h3>
+    <a href="/product">Review</a>
+    <a href="/product">Web Channel</a>
+    <a href="/product">iOS App</a>
+  </div>
+  <div class="foot-col">
+    <h3>Pricing</h3>
+    <a href="/pricing">Monthly</a>
+    <a href="/pricing">Annually</a>
+  </div>
+  <div class="foot-col">
+    <h3>Support</h3>
+    <a href="/support">Q&amp;A</a>
+    <a href="mailto:support@japanesesentencecards.com">support@japanesesentencecards.com</a>
+  </div>
+  <div class="foot-col">
+    <h3>Privacy</h3>
+    <a href="/privacy">Privacy policy</a>
+    <a href="/terms">Terms</a>
+  </div>
+  <div class="foot-brand">
+    <span>Japanese Sentence Card</span>
+    <p>© 2026</p>
+  </div>
+</footer>
 </body>
 </html>

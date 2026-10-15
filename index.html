@@ -17,10 +17,11 @@
 
 <header class="nav">
   <a class="brand" href="/">
-    <span class="mark"><i></i><i></i></span>
+    <span class="mark"><i>Aa</i><i>語</i></span>
     <span class="word">Japanese<br>Sentence Card</span>
   </a>
   <nav class="links">
+    <a href="/">Home</a>
     <a href="/product">Product</a>
     <a href="/pricing">Pricing</a>
     <a href="/support">Support</a>
@@ -50,7 +51,7 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </a>
       <div class="stats">
-        <div><strong id="stat-tags">TODO</strong><span>shared tags</span></div>
+        <div><strong>300+</strong><span>shared tags</span></div>
         <div><strong>20</strong><span>back-card languages</span></div>
         <div><strong>10</strong><span>cards a session</span></div>
       </div>
@@ -93,29 +94,40 @@
   </section>
 
   <section class="community">
-    <div class="ovl light">Community</div>
-    <h2>Tags built by other learners, ready to download.</h2>
-    <p class="sub light">Every shared tag states its back-card language, so you know what you're getting before it lands in your library.</p>
-    <div class="tag-grid">
-      <div class="tag-card">
-        <div class="tag-top"><span class="tag-name">JLPT N3 Grammar</span><span class="tag-lang">English</span></div>
-        <div class="tag-by">by kenji_t</div>
-        <div class="tag-meta">312 cards · 2,418 downloads</div>
+    <div class="community-inner">
+      <div class="community-head">
+        <h2>Tags built by other learners, ready to download.</h2>
+        <p class="sub light">Every shared tag states its back-card language, so you know what you're getting before it lands in your library.</p>
       </div>
-      <div class="tag-card">
-        <div class="tag-top"><span class="tag-name">Café &amp; Restaurant</span><span class="tag-lang">English</span></div>
-        <div class="tag-by">by mina.s</div>
-        <div class="tag-meta">86 cards · 1,204 downloads</div>
-      </div>
-      <div class="tag-card">
-        <div class="tag-top"><span class="tag-name">Anime Sentences</span><span class="tag-lang">Chinese</span></div>
-        <div class="tag-by">by sakura_dev</div>
-        <div class="tag-meta">240 cards · 741 downloads</div>
-      </div>
-      <div class="tag-card">
-        <div class="tag-top"><span class="tag-name">Train &amp; Travel</span><span class="tag-lang">Korean</span></div>
-        <div class="tag-by">by yuki</div>
-        <div class="tag-meta">64 cards · 588 downloads</div>
+      <div class="tag-grid">
+        <div class="tag-card">
+          <span class="tag-name">JLPT N3 Grammar</span>
+          <span class="tag-by">by kenji_t</span>
+          <span class="tag-lang">English</span>
+          <span class="tag-cards">312 cards</span>
+          <span class="tag-downloads">2,418 downloads</span>
+        </div>
+        <div class="tag-card">
+          <span class="tag-name">Café &amp; Restaurant</span>
+          <span class="tag-by">by mina.s</span>
+          <span class="tag-lang">English</span>
+          <span class="tag-cards">86 cards</span>
+          <span class="tag-downloads">1,204 downloads</span>
+        </div>
+        <div class="tag-card">
+          <span class="tag-name">Anime Sentences</span>
+          <span class="tag-by">by sakura_dev</span>
+          <span class="tag-lang">Chinese</span>
+          <span class="tag-cards">240 cards</span>
+          <span class="tag-downloads">741 downloads</span>
+        </div>
+        <div class="tag-card">
+          <span class="tag-name">Train &amp; Travel</span>
+          <span class="tag-by">by yuki</span>
+          <span class="tag-lang">Korean</span>
+          <span class="tag-cards">64 cards</span>
+          <span class="tag-downloads">588 downloads</span>
+        </div>
       </div>
     </div>
   </section>
@@ -139,23 +151,14 @@
     <a href="mailto:support@japanesesentencecards.com">support@japanesesentencecards.com</a>
   </div>
   <div class="foot-col">
-    <h3>Legal</h3>
+    <h3>Privacy</h3>
     <a href="/privacy">Privacy policy</a>
     <a href="/terms">Terms</a>
   </div>
   <div class="foot-brand">
-    <span class="badge">JSC</span>
-    <p>© 2026 Japanese Sentence Card</p>
+    <span>Japanese Sentence Card</span>
+    <p>© 2026</p>
   </div>
 </footer>
-
-<script>
-  // TODO before this branch merges to main: replace with the real count of
-  // active Community tags (select count(*) from shared_tags where status =
-  // 'active') — left as an obvious placeholder rather than a fabricated
-  // number. Static page, so this isn't live-queried — update by hand when
-  // it drifts noticeably.
-  document.getElementById("stat-tags").textContent = "TODO";
-</script>
 </body>
 </html>

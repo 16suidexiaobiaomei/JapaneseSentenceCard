@@ -4,7 +4,7 @@
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "ios:prepare": "rm -rf www && mkdir -p www && cp app.js apple-touch-icon.png favicon.png icon-192.png icon-512.png index.html manifest.json style.css vendor-supabase.js www/",
+    "ios:prepare": "rm -rf www && mkdir -p www && cp app.js apple-touch-icon.png favicon.png icon-192.png icon-512.png manifest.json style.css vendor-supabase.js www/ && cp login.html www/index.html",
     "ios:sync": "npm run ios:prepare && npx cap sync ios",
     "ios:open": "npm run ios:sync && npx cap open ios"
   },

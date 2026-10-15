@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Product — Japanese Sentence Card</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f5f4ed">
+<meta name="description" content="The iOS app and the web app are the same product signed into the same account — same cards, same tags, same review schedule.">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=Geist:wght@300;400;500;600&family=Noto+Serif+JP:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="marketing.css">
+</head>
+<body>
+
+<header class="nav">
+  <a class="brand" href="/">
+    <span class="mark"><i></i><i></i></span>
+    <span class="word">Japanese<br>Sentence Card</span>
+  </a>
+  <nav class="links">
+    <a href="/product">Product</a>
+    <a href="/pricing">Pricing</a>
+    <a href="/support">Support</a>
+  </nav>
+  <div class="nav-actions">
+    <a class="login-link" href="/login">Log in</a>
+    <a class="cta" href="/login">Start now</a>
+  </div>
+</header>
+
+<main>
+  <section class="product-hero">
+    <div class="ovl">One product · two channels</div>
+    <h1>Pick where you want to start. Your cards follow.</h1>
+    <p class="sub">The iOS app and the web app are the same product signed into the same account — same cards, same tags, same review schedule.</p>
+    <div class="seg">
+      <button type="button" id="seg-ios" class="on" onclick="showChannel('ios')">iOS app</button>
+      <button type="button" id="seg-web" onclick="showChannel('web')">Web app</button>
+    </div>
+  </section>
+
+  <section class="showcase">
+    <div class="mockwrap">
+      <div class="phone-frame mock on" id="mock-ios" style="max-width:280px">
+        <div class="phone-topbar">
+          <span class="dot-close">✕</span>
+          <span class="progress"><i style="width:60%"></i></span>
+          <span class="count">6 / 10</span>
+        </div>
+        <div class="review-card">
+          <div class="jp">お<ruby>会計<rp>(</rp><rt>かいけい</rt><rp>)</rp></ruby>をお<ruby>願<rp>(</rp><rt>ねが</rt><rp>)</rp></ruby>いします。</div>
+          <div class="romaji">Okaikei o onegai shimasu.</div>
+          <div class="card-foot">
+            <span class="play-pill">▶ play audio</span>
+            <span class="tapflip">Tap to flip</span>
+          </div>
+        </div>
+        <div class="phone-actions">
+          <span class="again">Didn't remember</span>
+          <span class="good">Remembered</span>
+        </div>
+      </div>
+      <div class="browser-frame mock" id="mock-web">
+        <div class="chrome"><i></i><i></i><i></i></div>
+        <div class="body">
+          <div class="side">
+            <div class="row on">All cards · 288</div>
+            <div class="row">Café &amp; Restaurant · 86</div>
+            <div class="row">JLPT N5 · 120</div>
+            <div class="row">Travel · 42</div>
+          </div>
+          <div class="main">
+            <div class="lbl">Due now</div>
+            <div class="num">272 cards</div>
+            <div class="kbd"><span>space — flip</span><span>← / → — judge</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col on" id="col-ios">
+      <h2>Review in the gaps of the day.</h2>
+      <p class="sub">Ten cards fit in a train ride. Audio plays without downloading anything, sessions work offline, and a daily reminder tells you when a review is waiting.</p>
+      <ul class="feat-list">
+        <li>Offline review and audio</li>
+        <li>Daily reminder notifications</li>
+        <li>iPhone and iPad, one download</li>
+      </ul>
+      <a class="dark-btn" href="https://apps.apple.com/us/app/japanese-sentence-card/id6811310469">
+        <svg width="16" height="16" viewBox="0 0 384 512" fill="currentColor"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+        Download on the App Store
+      </a>
+    </div>
+    <div class="col" id="col-web">
+      <h2>Build the library at your desk.</h2>
+      <p class="sub">A full keyboard makes short work of a hundred sentences. Import a list, tag in bulk, then review without lifting your hands off the keys.</p>
+      <ul class="feat-list">
+        <li>Keyboard review — space to flip, arrows to judge</li>
+        <li>Bulk import and bulk tagging</li>
+        <li>Nothing to install</li>
+      </ul>
+      <a class="ghost-btn" href="/login">
+        Open the web app
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+    </div>
+  </section>
+
+  <section class="compare">
+    <h2>Same account on both channels.</h2>
+    <table>
+      <thead>
+        <tr><th>Feature</th><th>iOS app</th><th>Web app</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Your cards, tags and schedule</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        <tr><td>Community tags — download and publish</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        <tr><td>Offline review and daily reminders</td><td class="yes">✓</td><td class="no">—</td></tr>
+        <tr><td>Bulk import, bulk tagging, keyboard review</td><td class="no">—</td><td class="yes">✓</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="foot-col">
+    <h3>Product</h3>
+    <a href="/product">Review</a>
+    <a href="/product">Web Channel</a>
+    <a href="/product">iOS App</a>
+  </div>
+  <div class="foot-col">
+    <h3>Pricing</h3>
+    <a href="/pricing">Basic</a>
+    <a href="/pricing">Premium</a>
+  </div>
+  <div class="foot-col">
+    <h3>Support</h3>
+    <a href="/support">Q&amp;A</a>
+    <a href="mailto:support@japanesesentencecards.com">support@japanesesentencecards.com</a>
+  </div>
+  <div class="foot-col">
+    <h3>Legal</h3>
+    <a href="/privacy">Privacy policy</a>
+    <a href="/terms">Terms</a>
+  </div>
+  <div class="foot-brand">
+    <span class="badge">JSC</span>
+    <p>© 2026 Japanese Sentence Card</p>
+  </div>
+</footer>
+
+<script>
+  function showChannel(which) {
+    document.getElementById("seg-ios").classList.toggle("on", which === "ios");
+    document.getElementById("seg-web").classList.toggle("on", which === "web");
+    document.getElementById("col-ios").classList.toggle("on", which === "ios");
+    document.getElementById("col-web").classList.toggle("on", which === "web");
+    document.getElementById("mock-ios").classList.toggle("on", which === "ios");
+    document.getElementById("mock-web").classList.toggle("on", which === "web");
+  }
+</script>
+</body>
+</html>

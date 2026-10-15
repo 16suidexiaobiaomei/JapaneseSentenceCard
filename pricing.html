@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pricing — Japanese Sentence Card</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f5f4ed">
+<meta name="description" content="Free to keep using. Premium when you want more. One price covers the iOS app and the web app.">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="marketing.css">
+</head>
+<body>
+
+<header class="nav">
+  <a class="brand" href="/">
+    <span class="mark"><i></i><i></i></span>
+    <span class="word">Japanese<br>Sentence Card</span>
+  </a>
+  <nav class="links">
+    <a href="/product">Product</a>
+    <a href="/pricing">Pricing</a>
+    <a href="/support">Support</a>
+  </nav>
+  <div class="nav-actions">
+    <a class="login-link" href="/login">Log in</a>
+    <a class="cta" href="/login">Start now</a>
+  </div>
+</header>
+
+<main>
+  <section class="pricing-hero">
+    <div class="ovl">Pricing</div>
+    <h1>Free to keep using. Premium when you want more.</h1>
+    <p class="sub">One price covers the iOS app and the web app. Cancel whenever you like.</p>
+    <div class="seg">
+      <button type="button" id="seg-monthly" class="on" onclick="showTerm('monthly')">Monthly</button>
+      <button type="button" id="seg-annual" onclick="showTerm('annual')">Annual</button>
+    </div>
+  </section>
+
+  <section class="plans">
+    <div class="plan basic">
+      <div class="tier">Basic</div>
+      <div class="price">Free</div>
+      <div class="price-note">Everything you need to start a habit.</div>
+      <ul>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c96442" stroke-width="2.5" stroke-linecap="round"><path d="m5 13 4.5 4.5L19 7"/></svg>Unlimited cards and up to 5 tags</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c96442" stroke-width="2.5" stroke-linecap="round"><path d="m5 13 4.5 4.5L19 7"/></svg>Automatic furigana and romaji on the back card</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c96442" stroke-width="2.5" stroke-linecap="round"><path d="m5 13 4.5 4.5L19 7"/></svg>Publish your own tags to the community</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c96442" stroke-width="2.5" stroke-linecap="round"><path d="m5 13 4.5 4.5L19 7"/></svg>Bulk tagging on the web app</li>
+        <li class="off"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b0aea5" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>Bulk import</li>
+        <li class="off"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b0aea5" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>Customize review card display</li>
+        <li class="off"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b0aea5" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>Download tags from the community</li>
+      </ul>
+      <a class="plan-cta" href="/login">Start free</a>
+      <div class="plan-foot">No card required</div>
+    </div>
+
+    <div class="plan premium">
+      <div class="tier">Premium</div>
+      <div class="price"><span id="price-amount">$4.99</span> <span id="price-unit" style="font-size:16px;font-weight:400">/ month</span></div>
+      <div class="price-note" id="price-note">Billed monthly, cancel any time.</div>
+      <ul>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97757" stroke-width="2.5" stroke-linecap="round"><path d="m5 13 4.5 4.5L19 7"/></svg>Unlimited cards and tags</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97757" stroke-width="2.5" stroke-linecap="round"><path d="m5 13 4.5 4.5L19 7"/></svg>Automatic furigana and romaji on both sides</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97757" stroke-width="2.5" stroke-linecap="round"><path d="m5 13 4.5 4.5L19 7"/></svg>Advanced settings to customize the review card</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97757" stroke-width="2.5" stroke-linecap="round"><path d="m5 13 4.5 4.5L19 7"/></svg>Unlimited community downloads</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97757" stroke-width="2.5" stroke-linecap="round"><path d="m5 13 4.5 4.5L19 7"/></svg>Bulk import and bulk tagging on the web app</li>
+      </ul>
+      <a class="plan-cta" href="https://apps.apple.com/us/app/japanese-sentence-card/id6811310469">Subscribe in the app</a>
+      <div class="plan-foot">Billed through the App Store · cancel any time</div>
+    </div>
+  </section>
+
+  <section class="trust">
+    <div class="trust-item">
+      <h3>One payment, both channels</h3>
+      <p>Premium bought on the web app unlocks the iOS app with the same email, and the other way round.</p>
+    </div>
+    <div class="trust-item">
+      <h3>Your cards and tags stay yours</h3>
+      <p>If Premium lapses, nothing is deleted — your cards and tags are still there on the Basic plan.</p>
+    </div>
+    <div class="trust-item">
+      <h3>Switch terms any time</h3>
+      <p>Move between monthly and annual whenever you like. The new term starts when the current one ends.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="foot-col">
+    <h3>Product</h3>
+    <a href="/product">Review</a>
+    <a href="/product">Web Channel</a>
+    <a href="/product">iOS App</a>
+  </div>
+  <div class="foot-col">
+    <h3>Pricing</h3>
+    <a href="/pricing">Basic</a>
+    <a href="/pricing">Premium</a>
+  </div>
+  <div class="foot-col">
+    <h3>Support</h3>
+    <a href="/support">Q&amp;A</a>
+    <a href="mailto:support@japanesesentencecards.com">support@japanesesentencecards.com</a>
+  </div>
+  <div class="foot-col">
+    <h3>Legal</h3>
+    <a href="/privacy">Privacy policy</a>
+    <a href="/terms">Terms</a>
+  </div>
+  <div class="foot-brand">
+    <span class="badge">JSC</span>
+    <p>© 2026 Japanese Sentence Card</p>
+  </div>
+</footer>
+
+<script>
+  // Prices match what's configured in RevenueCat today (no active intro
+  // offer) — a static page, so these need updating by hand if the price
+  // ever changes in App Store Connect/RevenueCat.
+  var PRICES = {
+    monthly: { amount: "$4.99", unit: "/ month", note: "Billed monthly, cancel any time." },
+    annual: { amount: "$34.99", unit: "/ year", note: "That's about $2.92/month, billed annually." }
+  };
+  function showTerm(term) {
+    document.getElementById("seg-monthly").classList.toggle("on", term === "monthly");
+    document.getElementById("seg-annual").classList.toggle("on", term === "annual");
+    document.getElementById("price-amount").textContent = PRICES[term].amount;
+    document.getElementById("price-unit").textContent = PRICES[term].unit;
+    document.getElementById("price-note").textContent = PRICES[term].note;
+  }
+</script>
+</body>
+</html>

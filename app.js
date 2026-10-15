@@ -32,10 +32,15 @@
     return;
   }
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  // Confirmation-email links must redirect back into the app — passed
-  // explicitly so it doesn't depend on the Supabase dashboard's Site URL
-  // being set correctly.
+  // The site root ("/") is the marketing homepage, not the app — used by
+  // openLegalPage() below, which needs the bare domain to reach /privacy
+  // and /terms regardless of where the app itself lives.
   const APP_URL = "https://japanesesentencecards.com/";
+  // Confirmation-email and password-reset links must redirect back into
+  // the actual app (now at /login, not the site root) — passed explicitly
+  // so it doesn't depend on the Supabase dashboard's Site URL being set
+  // correctly.
+  const LOGIN_URL = "https://japanesesentencecards.com/login";
   // Inside the native iOS/Android shell there's no same-origin backend to
   // hit with a relative fetch("/api/...") — the page is served from a
   // local/custom scheme, not from japanesesentencecards.com. Route API
@@ -2304,7 +2309,7 @@
     a.busy = true;
     a.error = "";
     render();
-    const { error } = await sb.auth.signUp({ email, password: a.password, options: { emailRedirectTo: APP_URL } });
+    const { error } = await sb.auth.signUp({ email, password: a.password, options: { emailRedirectTo: LOGIN_URL } });
     a.busy = false;
     if (error) { a.error = error.message; render(); return; }
     a.pendingEmail = email;
@@ -2383,7 +2388,7 @@
     a.busy = true;
     a.error = "";
     render();
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: APP_URL });
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: LOGIN_URL });
     a.busy = false;
     // Not an error path — reusing a.error just as the "status message" slot,
     // same as resendConfirmationEmail() does above.

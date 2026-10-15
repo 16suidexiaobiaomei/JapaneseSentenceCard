@@ -1,7 +1,7 @@
 {
   "name": "Japanese Sentence Card",
   "short_name": "JSC",
-  "start_url": "./index.html",
+  "start_url": "/login",
   "display": "standalone",
   "background_color": "#f5f4ed",
   "theme_color": "#f5f4ed",

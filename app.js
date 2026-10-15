@@ -7,7 +7,7 @@
 
   const STORAGE_KEY = "sentence-cards-v1";
   const SESSION_SIZE = 10;
-  const AUTOPLAY_AUDIO = true;
+  const AUTOPLAY_AUDIO = false;
   // Review cards render at a large fixed font size with no scrolling, so
   // a very long sentence would visibly overflow the card rather than
   // wrap gracefully. English translations naturally run longer than the
@@ -136,6 +136,33 @@
     ["週末は何をしましたか。", "Shūmatsu wa nani o shimashita ka.", "What did you do on the weekend?", ["Daily life"], "しゅうまつはなにをしましたか。", "<ruby>週末<rp>(</rp><rt>しゅうまつ</rt><rp>)</rp></ruby>は<ruby>何<rp>(</rp><rt>なに</rt><rp>)</rp></ruby>をしましたか。"],
   ];
 
+  // The same 71 gojuon/dakuten/handakuten cards as the official "Basic
+  // Hiragana" Community deck (see supabase/migrations/20260924090000_
+  // seed_basic_hiragana_deck.sql) — given to every new account directly
+  // here instead of through the Community download flow, since that
+  // flow is Premium-gated and counts against a download quota, neither
+  // of which should apply to a free starter deck every signup gets.
+  // back is the romaji reading (there's no separate translation for a
+  // single kana); furigana is left "" since there's no kanji to
+  // annotate — furiganaNode() already falls back to plain text for that.
+  const HIRAGANA_SEED_CARDS = [
+    ["あ", "a"], ["い", "i"], ["う", "u"], ["え", "e"], ["お", "o"],
+    ["か", "ka"], ["き", "ki"], ["く", "ku"], ["け", "ke"], ["こ", "ko"],
+    ["さ", "sa"], ["し", "shi"], ["す", "su"], ["せ", "se"], ["そ", "so"],
+    ["た", "ta"], ["ち", "chi"], ["つ", "tsu"], ["て", "te"], ["と", "to"],
+    ["な", "na"], ["に", "ni"], ["ぬ", "nu"], ["ね", "ne"], ["の", "no"],
+    ["は", "ha"], ["ひ", "hi"], ["ふ", "fu"], ["へ", "he"], ["ほ", "ho"],
+    ["ま", "ma"], ["み", "mi"], ["む", "mu"], ["め", "me"], ["も", "mo"],
+    ["や", "ya"], ["ゆ", "yu"], ["よ", "yo"],
+    ["ら", "ra"], ["り", "ri"], ["る", "ru"], ["れ", "re"], ["ろ", "ro"],
+    ["わ", "wa"], ["を", "wo"], ["ん", "n"],
+    ["が", "ga"], ["ぎ", "gi"], ["ぐ", "gu"], ["げ", "ge"], ["ご", "go"],
+    ["ざ", "za"], ["じ", "ji"], ["ず", "zu"], ["ぜ", "ze"], ["ぞ", "zo"],
+    ["だ", "da"], ["ぢ", "ji"], ["づ", "zu"], ["で", "de"], ["ど", "do"],
+    ["ば", "ba"], ["び", "bi"], ["ぶ", "bu"], ["べ", "be"], ["ぼ", "bo"],
+    ["ぱ", "pa"], ["ぴ", "pi"], ["ぷ", "pu"], ["ぺ", "pe"], ["ぽ", "po"],
+  ];
+
   // ---------------------------------------------------------------------
   // Persisted state
   // ---------------------------------------------------------------------
@@ -173,7 +200,24 @@
         audio: { type: "system" },
         createdAt: now - (SEED_CARDS.length - i) * 1000,
         updatedAt: now - (SEED_CARDS.length - i) * 1000,
-      })),
+      })).concat(HIRAGANA_SEED_CARDS.map((c, i) => ({
+        id: "seed-hiragana-" + now + "-" + i,
+        front: c[0],
+        romaji: c[1],
+        back: c[1],
+        tags: ["Basic Hiragana"],
+        kana: c[0],
+        furigana: "",
+        stability: null,
+        difficulty: null,
+        reps: 0,
+        lapses: 0,
+        lastReviewAt: null,
+        dueAt: now,
+        audio: { type: "system" },
+        createdAt: now - (HIRAGANA_SEED_CARDS.length - i) * 1000,
+        updatedAt: now - (HIRAGANA_SEED_CARDS.length - i) * 1000,
+      }))),
       reviewLog: {}, // "YYYY-MM-DD" -> count
       activeMsLog: {}, // "YYYY-MM-DD" -> ms active that day, for the 7d/30d "Time in app" tile
       // plan is server-authoritative (set by the RevenueCat webhook, not
@@ -1712,9 +1756,10 @@
     data.pendingDeletes.push(id);
     saveData();
     ui.draft = blankDraft();
+    // Stay on whatever tag/search filter was already active (rather than
+    // resetting to "All") so deleting a card mid-cleanup of a tag doesn't
+    // bounce the user away from it.
     ui.screen = "browse";
-    ui.filter = "All";
-    ui.query = "";
     render();
     pushDeleteCard(id);
   }
@@ -1779,9 +1824,12 @@
       render();
       setTimeout(() => { ui.cardSavedFlash = false; render(); }, 1500);
     } else {
+      // Stay on whatever tag/search filter was already active (rather than
+      // resetting to "All") so editing several cards in the same tag
+      // doesn't bounce back to the top of the full list each time —
+      // the existing data-remember-scroll mechanism then restores the
+      // exact scroll position too, since the filtered list is unchanged.
       ui.screen = "browse";
-      ui.filter = "All";
-      ui.query = "";
       render();
     }
     if (savedCard) pushCard(savedCard);

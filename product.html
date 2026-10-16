@@ -51,12 +51,13 @@
           <span class="progress"><i style="width:60%"></i></span>
           <span class="count">6 / 10</span>
         </div>
+        <span class="chip" style="align-self:flex-start;margin-bottom:10px;font-size:11px;padding:5px 11px;background:rgba(250,249,245,.08);border-color:transparent;color:#b0aea5">all tags</span>
         <div class="review-card">
           <div class="jp">お<ruby>会計<rp>(</rp><rt>かいけい</rt><rp>)</rp></ruby>をお<ruby>願<rp>(</rp><rt>ねが</rt><rp>)</rp></ruby>いします。</div>
           <div class="romaji">Okaikei o onegai shimasu.</div>
           <div class="card-foot">
             <span class="play-pill">▶ play audio</span>
-            <span class="tapflip">Tap to flip</span>
+            <span class="tapflip">Recall it, then judge yourself</span>
           </div>
         </div>
         <div class="phone-actions">
@@ -65,18 +66,51 @@
         </div>
       </div>
       <div class="browser-frame mock" id="mock-web">
-        <div class="chrome"><i></i><i></i><i></i></div>
-        <div class="body">
-          <div class="side">
-            <div class="row on">All cards · 288</div>
-            <div class="row">Café &amp; Restaurant · 86</div>
-            <div class="row">JLPT N5 · 120</div>
-            <div class="row">Travel · 42</div>
+        <div class="chrome"><i></i><i></i><i></i><span class="url">🔒 app.sentencecard.com/review</span></div>
+        <div class="webmock-nav">
+          <div class="brand-mini">
+            <span class="mark"><span class="mark-inner"><i>Aa</i><i>語</i></span></span>
+            <span>JAPANESE<br>SENTENCE CARD</span>
           </div>
-          <div class="main">
-            <div class="lbl">Due now</div>
-            <div class="num">272 cards</div>
-            <div class="kbd"><span>space — flip</span><span>← / → — judge</span></div>
+          <div class="webmock-tabs">
+            <span class="on">Review</span>
+            <span>Cards</span>
+            <span>Community</span>
+          </div>
+          <div class="actions">
+            <span class="newcard">New card</span>
+            <span class="avatar">MO</span>
+          </div>
+        </div>
+        <div class="webmock-body">
+          <div class="webmock-side">
+            <div class="lbl">This session</div>
+            <div class="row on"><span>Health</span><span>35 due</span></div>
+            <div class="row"><span>Greetings</span><span>42 due</span></div>
+            <div class="row"><span>Cafe &amp; Restaurant</span><span>50 due</span></div>
+            <div class="row"><span>JLPT N5</span><span>50 due</span></div>
+            <div class="keys">
+              <div class="lbl">Keys</div>
+              <div class="keys-row"><span class="key">space</span><span>flip</span></div>
+              <div class="keys-row"><span class="key">←</span><span class="key">→</span><span>judge</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="webmock-meta">
+              <span>Card 4 of 10 · Health · Greetings</span>
+              <span class="bar"><i></i></span>
+              <span>4 / 10</span>
+            </div>
+            <div class="webmock-card">
+              <div class="jp">おげんきですか</div>
+              <div class="romaji">o genki desu ka</div>
+              <span class="play-pill">▶ play audio</span>
+              <span class="hint">Press space to see the answer</span>
+            </div>
+            <div class="webmock-actions">
+              <span class="again">← Didn't remember</span>
+              <span class="good">Remembered →</span>
+            </div>
           </div>
         </div>
       </div>
@@ -102,7 +136,7 @@
         <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c96442" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 9.5 17.5 19.5 6.5"/></svg>Bulk import and bulk tagging</li>
         <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c96442" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 9.5 17.5 19.5 6.5"/></svg>Nothing to install</li>
       </ul>
-      <a class="ghost-btn" href="/login">
+      <a class="cta-big" href="/login">
         Open the web app
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </a>

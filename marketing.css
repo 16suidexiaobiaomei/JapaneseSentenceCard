@@ -113,26 +113,38 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 /* Phone mockup — matches the real review-screen proportions used in the
    source design (a 306x663 bezel wrapping a 393x852 iPhone screen, i.e.
    aspect-ratio ~1:2.17 — tall and narrow, not a stubby rounded square). */
+/* container-type lets every font-size below scale with the phone's own
+   rendered width via cqw units — needed because this one component gets
+   reused at very different sizes (a ~130px hero overlay, a ~280-306px
+   standalone showcase). Fixed px font-sizes looked fine at the original
+   306px size but caused the Japanese text to wrap one character per
+   line at hero scale, which in turn forced the whole card to overflow
+   its flex container (flex items don't shrink below their content's
+   intrinsic size unless min-height is reset). Ratios below are all
+   taken from the original 306px-wide design (e.g. 22px / 306px jp
+   font-size = 7.2cqw), so sizing is unchanged at that reference width.
+   min-height: 0 on the flex children is the other half of the fix. */
 .phone-frame {
   background: var(--dark); border-radius: 13%/6%; padding: 7% 6% 8%;
   width: 100%; max-width: 306px; aspect-ratio: 306 / 663;
   margin: 0 auto; box-shadow: 0 30px 70px rgba(0,0,0,.22);
   display: flex; flex-direction: column; box-sizing: border-box;
+  container-type: inline-size;
 }
-.phone-topbar { display: flex; align-items: center; gap: 10px; color: #faf9f5; margin-bottom: 5%; flex: none; }
-.phone-topbar .dot-close { width: 26px; height: 26px; border-radius: 9999px; background: rgba(250,249,245,.1); display: flex; align-items: center; justify-content: center; font-size: 11px; flex: none; }
-.phone-topbar .progress { flex: 1; height: 4px; border-radius: 9999px; background: rgba(250,249,245,.13); overflow: hidden; }
+.phone-topbar { display: flex; align-items: center; gap: 3.3cqw; color: #faf9f5; margin-bottom: 5%; flex: none; }
+.phone-topbar .dot-close { width: 8.5cqw; height: 8.5cqw; border-radius: 9999px; background: rgba(250,249,245,.1); display: flex; align-items: center; justify-content: center; font-size: 3.6cqw; flex: none; }
+.phone-topbar .progress { flex: 1; height: 1.3cqw; border-radius: 9999px; background: rgba(250,249,245,.13); overflow: hidden; }
 .phone-topbar .progress i { display: block; height: 100%; background: var(--accent); }
-.phone-topbar .count { font-size: 11px; color: #b0aea5; }
-.review-card { background: var(--card-bg); border-radius: 22px; padding: 24px 20px; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 10px; position: relative; }
-.review-card .jp { font-family: var(--jp); font-size: 22px; color: var(--text); }
+.phone-topbar .count { font-size: 3.6cqw; color: #b0aea5; white-space: nowrap; }
+.review-card { background: var(--card-bg); border-radius: 7.2cqw; padding: 7.8cqw 6.5cqw; flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 3.3cqw; position: relative; overflow: hidden; }
+.review-card .jp { font-family: var(--jp); font-size: 7.2cqw; color: var(--text); line-height: 1.3; }
 .review-card .jp rt { font-size: .5em; }
-.review-card .romaji { font-size: 12.5px; color: var(--muted); }
-.card-foot { position: absolute; left: 20px; right: 20px; bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
-.play-pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px; border-radius: 9999px; background: #f5f4ed; font-size: 11px; color: var(--muted); }
-.tapflip { font-size: 11px; color: var(--muted-3); }
-.phone-actions { display: flex; gap: 8px; margin-top: 5%; flex: none; }
-.phone-actions span { flex: 1; text-align: center; padding: 13px 6px; border-radius: 12px; font-size: 13px; font-weight: 500; }
+.review-card .romaji { font-size: 4.1cqw; color: var(--muted); white-space: nowrap; }
+.card-foot { position: absolute; left: 6.5cqw; right: 6.5cqw; bottom: 6.5cqw; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.play-pill { display: inline-flex; align-items: center; gap: 2px; padding: 2.6cqw 4.2cqw; border-radius: 9999px; background: #f5f4ed; font-size: 3.6cqw; color: var(--muted); white-space: nowrap; flex: none; }
+.tapflip { font-size: 3.6cqw; color: var(--muted-3); white-space: nowrap; }
+.phone-actions { display: flex; gap: 2.6cqw; margin-top: 5%; flex: none; }
+.phone-actions span { flex: 1; text-align: center; padding: 4.2cqw 2cqw; border-radius: 3.9cqw; font-size: 4.2cqw; font-weight: 500; }
 .phone-actions .again { background: rgba(250,249,245,.06); border: 1px solid rgba(250,249,245,.16); color: #faf9f5; }
 .phone-actions .good { background: var(--accent); color: #faf9f5; }
 
@@ -142,23 +154,19 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    "one account, two channels" caption and CTAs sit directly underneath,
    inside the same hero column — not a separate section below the hero.
    --------------------------------------------------------------------- */
-/* Fixed pixel sizes, not percentages — the phone's own 306:663 aspect
-   ratio makes it much taller than the browser mockup's content-based
-   height, so anchoring it with a percentage bottom/right (relative to
-   the wrap's height, which is only as tall as the browser mockup) sent
-   it shooting upward past the whole hero section. An explicit min-height
-   on the wrap gives it real room to sit in without escaping. */
-.hero-mock-wrap { position: relative; width: 100%; max-width: 420px; min-height: 420px; margin: 0 auto; }
-.hero-mock-wrap .browser-frame { width: 100%; max-width: 380px; }
-.hero-mock-wrap .phone-frame { position: absolute; right: 0; bottom: 0; width: 160px; max-width: none; box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.06); }
+/* Both mockups positioned absolutely within a wrap whose own aspect
+   ratio is fixed (610:365) — measured directly off a real render of the
+   source design file, not estimated. This is what the earlier percentage
+   attempt got wrong: percentages there were relative to a wrap whose
+   height came only from the browser mockup's content, so the much taller
+   phone shot upward past it. Here the wrap's box is defined up front,
+   so both children's percentages resolve against the same fixed frame. */
+.hero-mock-wrap { position: relative; width: 100%; max-width: 480px; aspect-ratio: 610 / 365; margin: 0 auto; }
+.hero-mock-wrap .browser-frame { position: absolute; left: 0; top: 12.9%; width: 75.4%; height: 87.1%; max-width: none; }
+.hero-mock-wrap .phone-frame { position: absolute; left: 73%; top: 0; width: 27%; height: 94.2%; max-width: none; aspect-ratio: auto; box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.06); }
 .hero-channels { margin-top: 28px; }
 .hero-channels p { font-size: 13.5px; color: var(--muted); margin: 0 0 16px; }
 .hero-channel-ctas { display: flex; gap: 10px; flex-wrap: wrap; }
-@media (max-width: 860px) {
-  .hero-mock-wrap { max-width: 320px; min-height: 340px; }
-  .hero-mock-wrap .browser-frame { max-width: 290px; }
-  .hero-mock-wrap .phone-frame { width: 130px; }
-}
 
 /* ---------------------------------------------------------------------
    Dark Community showcase
@@ -234,9 +242,10 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
   .showcase .mockwrap { order: -1; }
 }
 
-.browser-frame { background: var(--card-bg); border: 1px solid var(--border-2); border-radius: 16px; padding: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.08); }
-.browser-frame .chrome { display: flex; gap: 6px; margin-bottom: 12px; }
-.browser-frame .chrome i { width: 9px; height: 9px; border-radius: 9999px; background: var(--border); }
+.browser-frame { background: var(--card-bg); border: 1px solid var(--border-2); border-radius: 16px; padding: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.08); overflow: hidden; }
+.browser-frame .chrome { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+.browser-frame .chrome i { width: 9px; height: 9px; border-radius: 9999px; background: var(--border); flex: none; }
+.browser-frame .chrome .url { flex: 1; margin-left: 6px; background: #fff; border-radius: 9999px; padding: 5px 12px; font-size: 10.5px; color: var(--muted-2); }
 .browser-frame .body { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 .browser-frame .side { background: #fff; border-radius: 10px; padding: 10px; font-size: 11px; color: var(--muted); }
 .browser-frame .side .row { padding: 6px 4px; border-radius: 6px; margin-bottom: 2px; }
@@ -245,6 +254,42 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .browser-frame .main .lbl { font-size: 10px; color: #b0aea5; text-transform: uppercase; letter-spacing: .06em; }
 .browser-frame .main .num { font-family: var(--serif); font-size: 20px; margin: 4px 0 10px; }
 .browser-frame .main .kbd { font-size: 10px; color: #87867f; display: flex; gap: 10px; }
+
+/* Detailed "On the web" mockup for the product page — a full app chrome
+   (nav tabs, session sidebar with due counts, review card, keyboard-key
+   hints), matching web_design/product-page-7b.html's actual rendered
+   layout rather than the simplified hero-only version above. */
+.webmock-nav { display: flex; align-items: center; gap: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border-2); margin-bottom: 10px; }
+.webmock-nav .brand-mini { display: flex; align-items: center; gap: 7px; margin-right: auto; }
+.webmock-nav .brand-mini .mark { width: 22px; height: 22px; border-radius: 6px; }
+.webmock-nav .brand-mini .mark .mark-inner { width: 15px; height: 12px; }
+.webmock-nav .brand-mini .mark-inner i { width: 10px; height: 7.5px; border-radius: 1.5px; font-size: 4px; }
+.webmock-nav .brand-mini span { font-family: var(--serif); font-size: 8.5px; font-weight: 600; line-height: 1.2; color: var(--text); }
+.webmock-tabs { display: flex; gap: 14px; font-size: 11.5px; color: var(--muted); }
+.webmock-tabs .on { color: var(--text); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.webmock-nav .actions { display: flex; align-items: center; gap: 8px; }
+.webmock-nav .newcard { font-size: 10.5px; padding: 5px 10px; border-radius: 9999px; border: 1px solid var(--border); color: var(--text); }
+.webmock-nav .avatar { width: 20px; height: 20px; border-radius: 9999px; background: var(--border-2); display: flex; align-items: center; justify-content: center; font-size: 8px; color: var(--muted); }
+.webmock-body { display: grid; grid-template-columns: .85fr 1.5fr; gap: 14px; }
+.webmock-side .lbl { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-3); margin-bottom: 6px; }
+.webmock-side .row { display: flex; justify-content: space-between; padding: 7px 8px; border-radius: 7px; font-size: 10.5px; color: var(--text); margin-bottom: 2px; }
+.webmock-side .row span:last-child { color: var(--muted-2); }
+.webmock-side .row.on { background: var(--cream); }
+.webmock-side .keys { margin-top: 20px; }
+.webmock-side .keys-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 10px; color: var(--muted); }
+.webmock-side .key { padding: 3px 7px; border-radius: 5px; background: var(--cream); border: 1px solid var(--border-2); font-size: 9.5px; color: var(--text); }
+.webmock-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 10.5px; color: var(--muted); }
+.webmock-meta .bar { flex: 1; height: 3px; border-radius: 9999px; background: var(--border-2); margin: 0 10px; overflow: hidden; }
+.webmock-meta .bar i { display: block; height: 100%; width: 40%; background: var(--accent); }
+.webmock-card { background: var(--card-bg); border-radius: 12px; padding: 18px; min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative; }
+.webmock-card .jp { font-family: var(--jp); font-size: 17px; color: var(--text); }
+.webmock-card .romaji { font-size: 10.5px; color: var(--muted); }
+.webmock-card .play-pill { margin-top: 6px; font-size: 10px; padding: 5px 10px; }
+.webmock-card .hint { position: absolute; bottom: 8px; font-size: 9px; color: var(--muted-3); }
+.webmock-actions { display: flex; gap: 8px; margin-top: 10px; }
+.webmock-actions span { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px; border-radius: 9px; font-size: 11px; font-weight: 500; }
+.webmock-actions .again { background: var(--border-2); color: var(--text); }
+.webmock-actions .good { background: var(--accent); color: #faf9f5; }
 
 .compare { background: var(--dark); color: #faf9f5; padding: 72px 24px; }
 .compare > * { max-width: 820px; margin-left: auto; margin-right: auto; }

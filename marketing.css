@@ -142,14 +142,22 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    "one account, two channels" caption and CTAs sit directly underneath,
    inside the same hero column — not a separate section below the hero.
    --------------------------------------------------------------------- */
-.hero-mock-wrap { position: relative; width: 100%; max-width: 420px; margin: 0 auto; }
-.hero-mock-wrap .browser-frame { width: 100%; }
-.hero-mock-wrap .phone-frame { position: absolute; right: -8%; bottom: -8%; width: 46%; max-width: none; box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.06); }
+/* Fixed pixel sizes, not percentages — the phone's own 306:663 aspect
+   ratio makes it much taller than the browser mockup's content-based
+   height, so anchoring it with a percentage bottom/right (relative to
+   the wrap's height, which is only as tall as the browser mockup) sent
+   it shooting upward past the whole hero section. An explicit min-height
+   on the wrap gives it real room to sit in without escaping. */
+.hero-mock-wrap { position: relative; width: 100%; max-width: 420px; min-height: 420px; margin: 0 auto; }
+.hero-mock-wrap .browser-frame { width: 100%; max-width: 380px; }
+.hero-mock-wrap .phone-frame { position: absolute; right: 0; bottom: 0; width: 160px; max-width: none; box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.06); }
 .hero-channels { margin-top: 28px; }
 .hero-channels p { font-size: 13.5px; color: var(--muted); margin: 0 0 16px; }
 .hero-channel-ctas { display: flex; gap: 10px; flex-wrap: wrap; }
 @media (max-width: 860px) {
-  .hero-mock-wrap { max-width: 320px; }
+  .hero-mock-wrap { max-width: 320px; min-height: 340px; }
+  .hero-mock-wrap .browser-frame { max-width: 290px; }
+  .hero-mock-wrap .phone-frame { width: 130px; }
 }
 
 /* ---------------------------------------------------------------------

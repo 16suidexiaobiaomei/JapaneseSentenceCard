@@ -124,22 +124,41 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    taken from the original 306px-wide design (e.g. 22px / 306px jp
    font-size = 7.2cqw), so sizing is unchanged at that reference width.
    min-height: 0 on the flex children is the other half of the fix. */
+/* Padding lives on .phone-inner (a child), not .phone-frame itself
+   (the container): percentage padding always resolves against the
+   CONTAINING BLOCK's width, not the padded element's own width. Since
+   .phone-frame is absolutely positioned inside the much wider
+   .hero-mock-wrap at hero scale, percentage padding directly on it was
+   computed against 480px instead of its own ~130px, consuming nearly
+   half its interior space before any content even rendered. cqw units
+   on a non-container child avoid this (and avoid the circular
+   dependency that comes from a container sizing its own padding from
+   its own query units). */
 .phone-frame {
-  background: var(--dark); border-radius: 13%/6%; padding: 7% 6% 8%;
+  background: var(--dark); border-radius: 13%/6%;
   width: 100%; max-width: 306px; aspect-ratio: 306 / 663;
   margin: 0 auto; box-shadow: 0 30px 70px rgba(0,0,0,.22);
-  display: flex; flex-direction: column; box-sizing: border-box;
+  box-sizing: border-box; overflow: hidden;
   container-type: inline-size;
 }
+.phone-inner { height: 100%; padding: 7cqw 6cqw 8cqw; display: flex; flex-direction: column; box-sizing: border-box; }
 .phone-topbar { display: flex; align-items: center; gap: 3.3cqw; color: #faf9f5; margin-bottom: 5%; flex: none; }
 .phone-topbar .dot-close { width: 8.5cqw; height: 8.5cqw; border-radius: 9999px; background: rgba(250,249,245,.1); display: flex; align-items: center; justify-content: center; font-size: 3.6cqw; flex: none; }
 .phone-topbar .progress { flex: 1; height: 1.3cqw; border-radius: 9999px; background: rgba(250,249,245,.13); overflow: hidden; }
 .phone-topbar .progress i { display: block; height: 100%; background: var(--accent); }
 .phone-topbar .count { font-size: 3.6cqw; color: #b0aea5; white-space: nowrap; }
-.review-card { background: var(--card-bg); border-radius: 7.2cqw; padding: 7.8cqw 6.5cqw; flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 3.3cqw; position: relative; overflow: hidden; }
+.review-card { background: var(--card-bg); border-radius: 7.2cqw; padding: 7.8cqw 6.5cqw; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 3.3cqw; position: relative; overflow: hidden; }
 .review-card .jp { font-family: var(--jp); font-size: 7.2cqw; color: var(--text); line-height: 1.3; }
 .review-card .jp rt { font-size: .5em; }
 .review-card .romaji { font-size: 4.1cqw; color: var(--muted); white-space: nowrap; }
+/* The hero's mockup is much smaller than the standalone ~280-306px uses
+   (product page) and deliberately shows a short phrase, so it can afford
+   — and needs, for legibility — a much larger ratio than the shared one
+   above, which is tuned for longer sentences at the bigger sizes. The
+   source design sizes each mockup instance independently rather than
+   scaling one ratio uniformly; this mirrors that. */
+.hero-mock-wrap .review-card .jp { font-size: 11.5cqw; }
+.hero-mock-wrap .review-card .romaji { font-size: 5.2cqw; }
 .card-foot { position: absolute; left: 6.5cqw; right: 6.5cqw; bottom: 6.5cqw; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .play-pill { display: inline-flex; align-items: center; gap: 2px; padding: 2.6cqw 4.2cqw; border-radius: 9999px; background: #f5f4ed; font-size: 3.6cqw; color: var(--muted); white-space: nowrap; flex: none; }
 .tapflip { font-size: 3.6cqw; color: var(--muted-3); white-space: nowrap; }

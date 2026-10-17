@@ -161,8 +161,14 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    above, which is tuned for longer sentences at the bigger sizes. The
    source design sizes each mockup instance independently rather than
    scaling one ratio uniformly; this mirrors that. */
-.hero-mock-wrap .review-card .jp { font-size: 11.5cqw; }
-.hero-mock-wrap .review-card .romaji { font-size: 5.2cqw; }
+/* Left-aligned, not centered — matches how the real app actually lays
+   out the review card (see style.css / screenReview() in app.js), which
+   this hero mockup should resemble rather than an idealized centered
+   look. Font size also dialed back down from the last pass, which
+   overshot and read too large at this mockup's small scale. */
+.hero-mock-wrap .review-card { align-items: flex-start; text-align: left; }
+.hero-mock-wrap .review-card .jp { font-size: 8.5cqw; }
+.hero-mock-wrap .review-card .romaji { font-size: 4cqw; }
 .card-foot { position: absolute; left: 6.5cqw; right: 6.5cqw; bottom: 6.5cqw; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .play-pill { display: inline-flex; align-items: center; gap: 2px; padding: 2.6cqw 4.2cqw; border-radius: 9999px; background: #f5f4ed; font-size: 3.6cqw; color: var(--muted); white-space: nowrap; flex: none; }
 .tapflip { font-size: 3.6cqw; color: var(--muted-3); white-space: nowrap; }
@@ -186,10 +192,10 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    so both children's percentages resolve against the same fixed frame. */
 .hero-mock-wrap { position: relative; width: 100%; max-width: 620px; aspect-ratio: 610 / 365; margin: 0 auto; }
 .hero-mock-wrap .browser-frame { position: absolute; left: 0; top: 12.9%; width: 75.4%; height: 87.1%; max-width: none; }
-.hero-mock-wrap .phone-frame { position: absolute; left: 73%; top: 0; width: 27%; height: 94.2%; max-width: none; aspect-ratio: auto; box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.06); }
+.hero-mock-wrap .phone-frame { position: absolute; left: 73%; bottom: 0; width: 27%; height: 94.2%; max-width: none; aspect-ratio: auto; box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.06); }
 .hero-channels { margin-top: 32px; }
 .hero-channels p { font-size: 14.5px; color: var(--muted); margin: 0 0 18px; }
-.hero-channel-ctas .dark-btn, .hero-channel-ctas .ghost-btn { padding: 16px 28px; font-size: 16px; gap: 10px; }
+.hero-channel-ctas .dark-btn, .hero-channel-ctas .cta-big { padding: 16px 28px; font-size: 16px; gap: 10px; margin-top: 0; }
 .hero-channel-ctas svg { width: 18px; height: 18px; }
 .hero-channel-ctas { display: flex; gap: 10px; flex-wrap: wrap; }
 
@@ -374,7 +380,13 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .pricing-hero .sub { margin: 14px 0 0; font-size: 15.5px; color: var(--muted); }
 
 .plans { max-width: 1120px; margin: 36px auto 0; padding: 0 24px 64px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-.plan { border-radius: 22px; padding: 30px 26px; }
+/* display:flex + margin-top:auto on the CTA pushes it to the bottom of
+   the card — grid rows stretch both cards to equal height by default,
+   but without this the button just sits wherever its own card's
+   (shorter) content ends, landing at a different height than the other
+   card's button instead of lining up with it. */
+.plan { border-radius: 22px; padding: 30px 26px; display: flex; flex-direction: column; }
+.plan .plan-cta { margin-top: auto; }
 .plan.basic { background: var(--card-bg); border: 1px solid var(--border-2); }
 .plan.premium { background: var(--dark); color: #faf9f5; }
 .plan .tier { font-size: 13px; color: var(--muted-2); text-transform: uppercase; letter-spacing: .06em; }

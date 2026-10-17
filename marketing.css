@@ -97,7 +97,7 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    --------------------------------------------------------------------- */
 .hero {
   max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px;
-  display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center;
+  display: grid; grid-template-columns: .8fr 1.2fr; gap: 48px; align-items: center;
 }
 .hero h1 { font-size: 46px; line-height: 1.12; }
 .hero .sub { margin: 18px 0 24px; font-size: 16.5px; line-height: 1.65; color: var(--muted); max-width: 46ch; }
@@ -180,11 +180,13 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    height came only from the browser mockup's content, so the much taller
    phone shot upward past it. Here the wrap's box is defined up front,
    so both children's percentages resolve against the same fixed frame. */
-.hero-mock-wrap { position: relative; width: 100%; max-width: 480px; aspect-ratio: 610 / 365; margin: 0 auto; }
+.hero-mock-wrap { position: relative; width: 100%; max-width: 620px; aspect-ratio: 610 / 365; margin: 0 auto; }
 .hero-mock-wrap .browser-frame { position: absolute; left: 0; top: 12.9%; width: 75.4%; height: 87.1%; max-width: none; }
 .hero-mock-wrap .phone-frame { position: absolute; left: 73%; top: 0; width: 27%; height: 94.2%; max-width: none; aspect-ratio: auto; box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.06); }
-.hero-channels { margin-top: 28px; }
-.hero-channels p { font-size: 13.5px; color: var(--muted); margin: 0 0 16px; }
+.hero-channels { margin-top: 32px; }
+.hero-channels p { font-size: 14.5px; color: var(--muted); margin: 0 0 18px; }
+.hero-channel-ctas .dark-btn, .hero-channel-ctas .ghost-btn { padding: 16px 28px; font-size: 16px; gap: 10px; }
+.hero-channel-ctas svg { width: 18px; height: 18px; }
 .hero-channel-ctas { display: flex; gap: 10px; flex-wrap: wrap; }
 
 /* ---------------------------------------------------------------------
@@ -311,7 +313,7 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .webmock-actions .good { background: var(--accent); color: #faf9f5; }
 
 .compare { background: var(--dark); color: #faf9f5; padding: 72px 24px; }
-.compare > * { max-width: 820px; margin-left: auto; margin-right: auto; }
+.compare > * { max-width: 1120px; margin-left: auto; margin-right: auto; }
 .compare h2 { text-align: center; font-size: 28px; color: #faf9f5; margin-bottom: 30px; }
 .compare table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .compare th { text-align: left; font-weight: 500; color: #87867f; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 0 0 14px; }
@@ -327,7 +329,7 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .pricing-hero h1 { font-size: 38px; }
 .pricing-hero .sub { margin: 14px 0 0; font-size: 15.5px; color: var(--muted); }
 
-.plans { max-width: 820px; margin: 36px auto 0; padding: 0 24px 64px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.plans { max-width: 1120px; margin: 36px auto 0; padding: 0 24px 64px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .plan { border-radius: 22px; padding: 30px 26px; }
 .plan.basic { background: var(--card-bg); border: 1px solid var(--border-2); }
 .plan.premium { background: var(--dark); color: #faf9f5; }
@@ -350,7 +352,7 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
   .plans { grid-template-columns: 1fr; }
 }
 
-.trust { max-width: 1000px; margin: 0 auto; padding: 0 24px 72px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.trust { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
 .trust-item h3 { font-size: 15px; margin: 0 0 8px; }
 .trust-item p { font-size: 13.5px; color: var(--muted); line-height: 1.6; margin: 0; }
 @media (max-width: 760px) {

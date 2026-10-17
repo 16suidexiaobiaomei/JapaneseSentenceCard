@@ -151,7 +151,7 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .phone-topbar .progress { flex: 1; height: 1.3cqw; border-radius: 9999px; background: rgba(250,249,245,.13); overflow: hidden; }
 .phone-topbar .progress i { display: block; height: 100%; background: var(--accent); }
 .phone-topbar .count { font-size: 3.6cqw; color: #b0aea5; white-space: nowrap; }
-.review-card { background: var(--card-bg); border-radius: 7.2cqw; padding: 7.8cqw 6.5cqw; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 3.3cqw; position: relative; overflow: hidden; }
+.review-card { background: var(--card-bg); border-radius: 7.2cqw; padding: 7.8cqw 6.5cqw; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; text-align: left; gap: 3.3cqw; position: relative; overflow: hidden; }
 .review-card .jp { font-family: var(--jp); font-size: 7.2cqw; color: var(--text); line-height: 1.3; }
 .review-card .jp rt { font-size: .5em; }
 .review-card .romaji { font-size: 4.1cqw; color: var(--muted); white-space: nowrap; }
@@ -161,12 +161,10 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    above, which is tuned for longer sentences at the bigger sizes. The
    source design sizes each mockup instance independently rather than
    scaling one ratio uniformly; this mirrors that. */
-/* Left-aligned, not centered — matches how the real app actually lays
-   out the review card (see style.css / screenReview() in app.js), which
-   this hero mockup should resemble rather than an idealized centered
-   look. Font size also dialed back down from the last pass, which
-   overshot and read too large at this mockup's small scale. */
-.hero-mock-wrap .review-card { align-items: flex-start; text-align: left; }
+/* Left-alignment is now the shared .review-card default (matches the
+   real app's actual layout everywhere this mockup is reused) — only the
+   font size needs its own value here, dialed back down from an earlier
+   pass that overshot at this mockup's small scale. */
 .hero-mock-wrap .review-card .jp { font-size: 8.5cqw; }
 .hero-mock-wrap .review-card .romaji { font-size: 4cqw; }
 .card-foot { position: absolute; left: 6.5cqw; right: 6.5cqw; bottom: 6.5cqw; display: flex; align-items: center; justify-content: space-between; gap: 6px; }

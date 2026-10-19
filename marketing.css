@@ -375,10 +375,20 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
   .showcase .mockwrap { order: -1; }
 }
 
-.browser-frame { background: var(--card-bg); border: 1px solid var(--border-2); border-radius: 16px; padding: 20px; box-shadow: 0 20px 50px rgba(0,0,0,.08); overflow: hidden; container-type: inline-size; min-width: 0; }
-.browser-frame .chrome { display: flex; align-items: center; gap: 7px; margin-bottom: 16px; }
-.browser-frame .chrome i { width: 10px; height: 10px; border-radius: 9999px; background: var(--border); flex: none; }
-.browser-frame .chrome .url { flex: 1; margin-left: 8px; background: #fff; border-radius: 9999px; padding: 7px 16px; font-size: 13px; color: var(--muted-2); }
+/* padding/chrome sizing below is cqw, not px — relative to this frame's
+   own rendered width (container-type: inline-size), with 760px (the
+   showcase's fixed desktop track width, its reference size) as 100cqw.
+   That lets the product page's mock scale smoothly down to whatever a
+   phone viewport leaves it, rather than needing a breakpoint of its
+   own: the product page's own grid column goes from a fixed 760px to
+   1fr below 860px, so without this the frame would just overflow (or
+   previously, needed the @container simplification below to stay
+   legible at all — see the hero's override further down for why
+   neither mock wants that simplification instead). */
+.browser-frame { background: var(--card-bg); border: 1px solid var(--border-2); border-radius: 16px; padding: 2.63cqw; box-shadow: 0 20px 50px rgba(0,0,0,.08); overflow: hidden; container-type: inline-size; min-width: 0; }
+.browser-frame .chrome { display: flex; align-items: center; gap: .92cqw; margin-bottom: 2.11cqw; }
+.browser-frame .chrome i { width: 1.32cqw; height: 1.32cqw; border-radius: 9999px; background: var(--border); flex: none; }
+.browser-frame .chrome .url { flex: 1; margin-left: 1.05cqw; background: #fff; border-radius: 9999px; padding: .92cqw 2.11cqw; font-size: 1.71cqw; color: var(--muted-2); }
 .browser-frame .body { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 .browser-frame .side { background: #fff; border-radius: 10px; padding: 10px; font-size: 11px; color: var(--muted); }
 .browser-frame .side .row { padding: 6px 4px; border-radius: 6px; margin-bottom: 2px; }
@@ -398,64 +408,48 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    a real render, not estimated). .hero-mock-wrap overrides these back
    down further below, since that's a much smaller, compact instance of
    the same mockup, not the reference size. */
-.webmock-nav { display: flex; align-items: center; gap: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border-2); margin-bottom: 16px; }
-.webmock-nav .brand-mini { display: flex; align-items: center; gap: 9px; margin-right: auto; }
-.webmock-nav .brand-mini .mark { width: 22px; height: 22px; border-radius: 6px; }
-.webmock-nav .brand-mini .mark .mark-inner { width: 15px; height: 12px; }
-.webmock-nav .brand-mini .mark-inner i { width: 10px; height: 7.5px; border-radius: 1.5px; font-size: 4px; }
-.webmock-nav .brand-mini span { font-family: var(--serif); font-size: 11px; font-weight: 600; line-height: 1.2; color: var(--text); }
-.webmock-tabs { display: flex; gap: 20px; font-size: 15px; color: var(--muted); }
+.webmock-nav { display: flex; align-items: center; gap: 2.63cqw; padding-bottom: 1.84cqw; border-bottom: 1px solid var(--border-2); margin-bottom: 2.11cqw; }
+.webmock-nav .brand-mini { display: flex; align-items: center; gap: 1.18cqw; margin-right: auto; }
+.webmock-nav .brand-mini .mark { width: 2.89cqw; height: 2.89cqw; border-radius: .79cqw; }
+.webmock-nav .brand-mini .mark .mark-inner { width: 1.97cqw; height: 1.58cqw; }
+.webmock-nav .brand-mini .mark-inner i { width: 1.32cqw; height: .99cqw; border-radius: .2cqw; font-size: .53cqw; }
+.webmock-nav .brand-mini span { font-family: var(--serif); font-size: 1.45cqw; font-weight: 600; line-height: 1.2; color: var(--text); }
+.webmock-tabs { display: flex; gap: 2.63cqw; font-size: 1.97cqw; color: var(--muted); }
 .webmock-tabs .on { color: var(--text); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
-.webmock-nav .actions { display: flex; align-items: center; gap: 10px; }
-.webmock-nav .newcard { font-size: 13px; padding: 7px 14px; border-radius: 9999px; border: 1px solid var(--border); color: var(--text); }
-.webmock-nav .avatar { width: 26px; height: 26px; border-radius: 9999px; background: var(--border-2); display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--muted); }
-.webmock-body { display: grid; grid-template-columns: 190px 1fr; gap: 20px; min-width: 0; }
+.webmock-nav .actions { display: flex; align-items: center; gap: 1.32cqw; }
+.webmock-nav .newcard { font-size: 1.71cqw; padding: .92cqw 1.84cqw; border-radius: 9999px; border: 1px solid var(--border); color: var(--text); }
+.webmock-nav .avatar { width: 3.42cqw; height: 3.42cqw; border-radius: 9999px; background: var(--border-2); display: flex; align-items: center; justify-content: center; font-size: 1.32cqw; color: var(--muted); }
+.webmock-body { display: grid; grid-template-columns: 25cqw 1fr; gap: 2.63cqw; min-width: 0; }
 .webmock-body > * { min-width: 0; }
-.webmock-side .lbl { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-3); margin-bottom: 8px; }
-.webmock-side .row { display: flex; justify-content: space-between; padding: 9px 10px; border-radius: 7px; font-size: 14px; color: var(--text); margin-bottom: 2px; }
+.webmock-side .lbl { font-size: 1.45cqw; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-3); margin-bottom: 1.05cqw; }
+.webmock-side .row { display: flex; justify-content: space-between; padding: 1.18cqw 1.32cqw; border-radius: .92cqw; font-size: 1.84cqw; color: var(--text); margin-bottom: .26cqw; }
 .webmock-side .row span:last-child { color: var(--muted-2); }
 .webmock-side .row.on { background: var(--cream); }
-.webmock-side .keys { margin-top: 26px; }
-.webmock-side .keys-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
-.webmock-side .key { padding: 4px 9px; border-radius: 5px; background: var(--cream); border: 1px solid var(--border-2); font-size: 11px; color: var(--text); }
-.webmock-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
-.webmock-meta .bar { flex: 1; height: 3px; border-radius: 9999px; background: var(--border-2); margin: 0 14px; overflow: hidden; }
+.webmock-side .keys { margin-top: 3.42cqw; }
+.webmock-side .keys-row { display: flex; align-items: center; gap: 1.05cqw; margin-bottom: .79cqw; font-size: 1.58cqw; color: var(--muted); }
+.webmock-side .key { padding: .53cqw 1.18cqw; border-radius: .66cqw; background: var(--cream); border: 1px solid var(--border-2); font-size: 1.45cqw; color: var(--text); }
+.webmock-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.32cqw; font-size: 1.71cqw; color: var(--muted); }
+.webmock-meta .bar { flex: 1; height: .39cqw; border-radius: 9999px; background: var(--border-2); margin: 0 1.84cqw; overflow: hidden; }
 .webmock-meta .bar i { display: block; height: 100%; width: 40%; background: var(--accent); }
-.webmock-card { background: var(--card-bg); border-radius: 12px; padding: 26px; min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; position: relative; }
-.webmock-card .jp { font-family: var(--jp); font-size: 24px; color: var(--text); }
-.webmock-card .romaji { font-size: 13px; color: var(--muted); }
-.webmock-card .play-pill { margin-top: 6px; font-size: 12px; padding: 7px 14px; }
-.webmock-card .hint { position: absolute; bottom: 12px; font-size: 11px; color: var(--muted-3); }
-.webmock-actions { display: flex; gap: 10px; margin-top: 14px; }
-.webmock-actions span { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 12px; border-radius: 9px; font-size: 14px; font-weight: 500; }
+.webmock-card { background: var(--card-bg); border-radius: 1.58cqw; padding: 3.42cqw; min-height: 34.21cqw; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.05cqw; position: relative; }
+.webmock-card .jp { font-family: var(--jp); font-size: 3.16cqw; color: var(--text); }
+.webmock-card .romaji { font-size: 1.71cqw; color: var(--muted); }
+.webmock-card .play-pill { margin-top: .79cqw; font-size: 1.58cqw; padding: .92cqw 1.84cqw; }
+.webmock-card .hint { position: absolute; bottom: 1.58cqw; font-size: 1.45cqw; color: var(--muted-3); }
+.webmock-actions { display: flex; gap: 1.32cqw; margin-top: 1.84cqw; }
+.webmock-actions span { flex: 1; display: flex; align-items: center; justify-content: center; gap: .92cqw; padding: 1.58cqw; border-radius: 1.18cqw; font-size: 1.84cqw; font-weight: 500; }
 .webmock-actions .again { background: var(--border-2); color: var(--text); }
 .webmock-actions .good { background: var(--accent); color: #faf9f5; }
 
-/* Simplify the web mockup whenever its OWN rendered width gets narrow —
-   a container query, not a page media query, because this happens for
-   two different reasons: the hero's version is always small by design,
-   and the product page's version only gets squeezed on a narrow phone
-   viewport. Reacting to the mock's actual width handles both the same
-   way, rather than needing two separate breakpoints tuned by hand. */
-/* At this point the mobile_design/ reference drops the nav row and the
-   session sidebar entirely rather than just shrinking them — it's just
-   the chrome bar, the current card's progress, and the review card
-   itself. Matches both the hero's always-tiny instance and the product
-   page's version once it's squeezed onto a phone viewport. */
-/* Nested inside a real-viewport media query, not just the container
-   query alone — the hero's browser-frame is always narrow (<=467px) by
-   design, even on desktop, so a container-query-only rule fired there
-   too and hid its nav/sidebar on desktop, which wasn't wanted (the
-   detailed mockup should still show there). This only simplifies the
-   mockup when the page itself is actually mobile width. */
-@media (max-width: 760px) {
-  @container (max-width: 480px) {
-    .webmock-nav, .webmock-side { display: none; }
-    .webmock-body { grid-template-columns: 1fr; }
-    .webmock-meta { flex-wrap: wrap; row-gap: 6px; }
-    .webmock-meta .bar { order: 3; flex-basis: 100%; margin: 4px 0 0; }
-  }
-}
+/* Earlier versions of this file simplified the web mockup (hiding the
+   nav row and sidebar) whenever its own rendered width got narrow,
+   since that happens on both the hero's always-small instance and the
+   product page's once a phone viewport squeezes its fixed 760px track
+   down. Removed: on request, both should look exactly like the full
+   desktop mockup, just proportionally smaller — not a reduced version.
+   All the sizing above and below is cqw rather than fixed px for
+   exactly this reason, so it scales down cleanly instead of needing a
+   breakpoint-specific simplified layout. */
 
 /* Compact override for the hero's much smaller layered mockup. Values
    are cqw (relative to .browser-frame's own container width, ~467px at
@@ -467,14 +461,7 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .hero-mock-wrap .browser-frame { padding: 3cqw; }
 .hero-mock-wrap .browser-frame .chrome { gap: 1.28cqw; margin-bottom: 2.57cqw; }
 .hero-mock-wrap .browser-frame .chrome .url { margin-left: 1.28cqw; padding: 1.07cqw 2.57cqw; font-size: 2.25cqw; }
-/* The @container rule above simplifies any browser-frame that renders
-   narrow — which the hero's always is, by design, even on desktop. But
-   the hero should always show the full detailed mock (nav, sidebar,
-   card), just scaled down, never the simplified version, on mobile
-   included. These win on specificity (two classes vs. the container
-   rule's one) regardless of source order or breakpoint. */
-.hero-mock-wrap .webmock-nav { display: flex; gap: 3.42cqw; padding-bottom: 2.14cqw; margin-bottom: 2.14cqw; }
-.hero-mock-wrap .webmock-side { display: block; }
+.hero-mock-wrap .webmock-nav { gap: 3.42cqw; padding-bottom: 2.14cqw; margin-bottom: 2.14cqw; }
 .hero-mock-wrap .webmock-nav .brand-mini { gap: 1.5cqw; }
 .hero-mock-wrap .webmock-nav .brand-mini span { font-size: 1.82cqw; }
 .hero-mock-wrap .webmock-tabs { gap: 3cqw; font-size: 2.46cqw; }
@@ -486,8 +473,8 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .hero-mock-wrap .webmock-side .keys { margin-top: 4.28cqw; }
 .hero-mock-wrap .webmock-side .keys-row { gap: 1.28cqw; margin-bottom: .86cqw; font-size: 2.14cqw; }
 .hero-mock-wrap .webmock-side .key { padding: .64cqw 1.5cqw; font-size: 2.03cqw; }
-.hero-mock-wrap .webmock-meta { margin-bottom: 1.71cqw; font-size: 2.25cqw; flex-wrap: nowrap; }
-.hero-mock-wrap .webmock-meta .bar { margin: 0 2.14cqw; order: 0; flex-basis: auto; }
+.hero-mock-wrap .webmock-meta { margin-bottom: 1.71cqw; font-size: 2.25cqw; }
+.hero-mock-wrap .webmock-meta .bar { margin: 0 2.14cqw; }
 .hero-mock-wrap .webmock-card { padding: 3.85cqw; min-height: 30cqw; gap: 1.28cqw; }
 .hero-mock-wrap .webmock-card .jp { font-size: 3.64cqw; }
 .hero-mock-wrap .webmock-card .romaji { font-size: 2.25cqw; }

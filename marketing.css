@@ -70,8 +70,31 @@ a { color: inherit; text-decoration: none; }
   font-size: 13.5px; font-weight: 500;
 }
 .nav .cta:hover { background: var(--accent-2); }
+/* Hamburger button + full-screen mobile menu — on mobile there was
+   previously no way at all to reach Product/Pricing/Support/Log in once
+   .nav .links was hidden below this breakpoint; this replaces that gap
+   with the same pattern as mobile_design/: a sticky header with just the
+   logo + a toggle button, opening a full-screen menu with large links
+   and both app CTAs. */
+.nav-burger { display: none; width: 40px; height: 40px; align-items: center; justify-content: center; flex: none; background: none; border: none; padding: 0; cursor: pointer; }
+.nav-burger .icon-close { display: none; }
+body.menu-open .nav-burger .icon-burger { display: none; }
+body.menu-open .nav-burger .icon-close { display: block; }
+.mobile-menu { display: none; }
+body.menu-open { overflow: hidden; }
+body.menu-open .mobile-menu {
+  display: flex; flex-direction: column;
+  position: fixed; inset: 0; z-index: 40;
+  background: var(--cream); padding: 90px 24px 40px; overflow-y: auto;
+}
+.mobile-menu a.menu-link { font-family: var(--serif); font-size: 28px; padding: 14px 0; border-bottom: 1px solid var(--border-2); color: var(--text); }
+.mobile-menu a.menu-login { font-size: 16px; color: var(--muted); padding: 16px 0; }
+.mobile-menu .menu-btn { margin-top: 6px; }
+.mobile-menu .dark-btn, .mobile-menu .cta-big { display: flex; width: 100%; box-sizing: border-box; justify-content: center; height: 52px; margin-top: 0; }
 @media (max-width: 760px) {
-  .nav .links { display: none; }
+  .nav .links, .nav .nav-actions { display: none; }
+  .nav-burger { display: flex; }
+  .nav { position: sticky; top: 0; z-index: 50; background: var(--cream); }
 }
 
 /* ---------------------------------------------------------------------
@@ -116,6 +139,27 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 @media (max-width: 860px) {
   .hero { grid-template-columns: 1fr; padding-top: 24px; }
   .hero h1 { font-size: 36px; }
+  /* Reorder content for mobile (per mobile_design/mobile-home-6b.html):
+     CTAs come right after the subhead, before the device mockup — not
+     after it. display: contents makes .hero-copy/.hero-art "disappear"
+     for layout purposes so their children become direct grid items of
+     .hero, each individually placed via order, rather than staying
+     fixed in each wrapper's own internal sequence. */
+  /* gap: 0 because .hero now has 8 direct grid items instead of 2 once
+     .hero-copy/.hero-art collapse below — the 48px gap meant for a
+     2-column layout would otherwise apply 7 times over, between every
+     reordered section. Spacing between sections is set explicitly per
+     element instead. */
+  .hero { gap: 0; }
+  .hero-copy, .hero-art { display: contents; }
+  .hero .ovl { order: 1; }
+  .hero h1 { order: 2; margin-top: 12px; }
+  .hero .sub { order: 3; margin-top: 16px; }
+  .hero-channels { order: 4; margin-top: 24px; }
+  .hero-mock-wrap { order: 5; margin-top: 28px; }
+  .hero .chips { order: 6; margin-top: 28px; }
+  .hero .cta-big { order: 7; margin-top: 24px; }
+  .hero .stats { order: 8; margin-top: 32px; }
 }
 
 /* Phone mockup — matches the real review-screen proportions used in the
@@ -220,6 +264,13 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
   .tag-grid { grid-template-columns: repeat(2, 1fr); }
   .community-head { flex-direction: column; align-items: flex-start; gap: 16px; }
   .community h2 { font-size: 26px; }
+}
+@media (max-width: 600px) {
+  /* Horizontal scroll strip on phones (per mobile_design/) rather than
+     a cramped 2-column grid. */
+  .tag-grid { display: flex; grid-template-columns: none; overflow-x: auto; margin: 0 -24px; padding: 0 24px 4px; scrollbar-width: none; }
+  .tag-grid::-webkit-scrollbar { display: none; }
+  .tag-card { flex: 0 0 240px; }
 }
 
 /* ---------------------------------------------------------------------
@@ -348,12 +399,14 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    and the product page's version only gets squeezed on a narrow phone
    viewport. Reacting to the mock's actual width handles both the same
    way, rather than needing two separate breakpoints tuned by hand. */
+/* At this point the mobile_design/ reference drops the nav row and the
+   session sidebar entirely rather than just shrinking them — it's just
+   the chrome bar, the current card's progress, and the review card
+   itself. Matches both the hero's always-tiny instance and the product
+   page's version once it's squeezed onto a phone viewport. */
 @container (max-width: 480px) {
-  .webmock-nav { flex-wrap: wrap; row-gap: 8px; }
-  .webmock-nav .actions { display: none; }
-  .webmock-tabs { gap: 12px; }
+  .webmock-nav, .webmock-side { display: none; }
   .webmock-body { grid-template-columns: 1fr; }
-  .webmock-side .keys { display: none; }
   .webmock-meta { flex-wrap: wrap; row-gap: 6px; }
   .webmock-meta .bar { order: 3; flex-basis: 100%; margin: 4px 0 0; }
 }
@@ -365,18 +418,11 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .hero-mock-wrap .browser-frame { padding: 14px; }
 .hero-mock-wrap .browser-frame .chrome { gap: 6px; margin-bottom: 12px; }
 .hero-mock-wrap .browser-frame .chrome .url { margin-left: 6px; padding: 5px 12px; font-size: 10.5px; }
-.hero-mock-wrap .webmock-nav { gap: 16px; padding-bottom: 10px; margin-bottom: 10px; }
-.hero-mock-wrap .webmock-nav .brand-mini { gap: 7px; }
-.hero-mock-wrap .webmock-nav .brand-mini span { font-size: 8.5px; }
-.hero-mock-wrap .webmock-tabs { gap: 14px; font-size: 11.5px; }
-.hero-mock-wrap .webmock-nav .newcard { font-size: 10.5px; padding: 5px 10px; }
-.hero-mock-wrap .webmock-nav .avatar { width: 20px; height: 20px; font-size: 8px; }
-.hero-mock-wrap .webmock-body { gap: 14px; grid-template-columns: .85fr 1.5fr; }
-.hero-mock-wrap .webmock-side .lbl { font-size: 9px; margin-bottom: 6px; }
-.hero-mock-wrap .webmock-side .row { padding: 7px 8px; font-size: 10.5px; margin-bottom: 2px; }
-.hero-mock-wrap .webmock-side .keys { margin-top: 20px; }
-.hero-mock-wrap .webmock-side .keys-row { gap: 6px; margin-bottom: 4px; font-size: 10px; }
-.hero-mock-wrap .webmock-side .key { padding: 3px 7px; font-size: 9.5px; }
+/* .webmock-nav / .webmock-side have no overrides here — the hero's
+   browser-frame is always <=467px (75.4% of a 620px max-width wrap), so
+   the @container rule above that hides both entirely always applies;
+   overriding their now-invisible internals would be dead CSS. */
+.hero-mock-wrap .webmock-body { gap: 14px; }
 .hero-mock-wrap .webmock-meta { margin-bottom: 8px; font-size: 10.5px; }
 .hero-mock-wrap .webmock-meta .bar { margin: 0 10px; }
 .hero-mock-wrap .webmock-card { padding: 18px; min-height: 140px; gap: 6px; }
@@ -431,6 +477,11 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .plan.premium .plan-foot { color: #87867f; }
 @media (max-width: 760px) {
   .plans { grid-template-columns: 1fr; }
+  /* Premium leads on mobile (per mobile_design/mobile-pricing-8a.html) —
+     a deliberate choice to show the paid plan first once space forces a
+     single column, not just a side effect of DOM order. */
+  .plan.premium { order: 1; }
+  .plan.basic { order: 2; }
 }
 
 .trust { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }

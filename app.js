@@ -142,30 +142,34 @@
   ];
 
   // The same 71 gojuon/dakuten/handakuten cards as the official "Basic
-  // Hiragana" Community deck (see supabase/migrations/20260924090000_
-  // seed_basic_hiragana_deck.sql) — given to every new account directly
-  // here instead of through the Community download flow, since that
-  // flow is Premium-gated and counts against a download quota, neither
-  // of which should apply to a free starter deck every signup gets.
-  // back is the romaji reading (there's no separate translation for a
-  // single kana); furigana is left "" since there's no kanji to
-  // annotate — furiganaNode() already falls back to plain text for that.
+  // Hiragana & Katakana" Community deck (see supabase/migrations/
+  // 20260924090000_seed_basic_hiragana_deck.sql and 20261019090000_
+  // hiragana_deck_katakana_on_back.sql) — given to every new account
+  // directly here instead of through the Community download flow, since
+  // that flow is Premium-gated and counts against a download quota,
+  // neither of which should apply to a free starter deck every signup
+  // gets. front is the hiragana character, romaji is its reading (still
+  // shown as the small hint above the answer), and back is the matching
+  // katakana character — there's no separate translation for a single
+  // kana, so this deck deliberately uses back to teach the other script
+  // instead. furigana is left "" since there's no kanji to annotate —
+  // furiganaNode() already falls back to plain text for that.
   const HIRAGANA_SEED_CARDS = [
-    ["あ", "a"], ["い", "i"], ["う", "u"], ["え", "e"], ["お", "o"],
-    ["か", "ka"], ["き", "ki"], ["く", "ku"], ["け", "ke"], ["こ", "ko"],
-    ["さ", "sa"], ["し", "shi"], ["す", "su"], ["せ", "se"], ["そ", "so"],
-    ["た", "ta"], ["ち", "chi"], ["つ", "tsu"], ["て", "te"], ["と", "to"],
-    ["な", "na"], ["に", "ni"], ["ぬ", "nu"], ["ね", "ne"], ["の", "no"],
-    ["は", "ha"], ["ひ", "hi"], ["ふ", "fu"], ["へ", "he"], ["ほ", "ho"],
-    ["ま", "ma"], ["み", "mi"], ["む", "mu"], ["め", "me"], ["も", "mo"],
-    ["や", "ya"], ["ゆ", "yu"], ["よ", "yo"],
-    ["ら", "ra"], ["り", "ri"], ["る", "ru"], ["れ", "re"], ["ろ", "ro"],
-    ["わ", "wa"], ["を", "wo"], ["ん", "n"],
-    ["が", "ga"], ["ぎ", "gi"], ["ぐ", "gu"], ["げ", "ge"], ["ご", "go"],
-    ["ざ", "za"], ["じ", "ji"], ["ず", "zu"], ["ぜ", "ze"], ["ぞ", "zo"],
-    ["だ", "da"], ["ぢ", "ji"], ["づ", "zu"], ["で", "de"], ["ど", "do"],
-    ["ば", "ba"], ["び", "bi"], ["ぶ", "bu"], ["べ", "be"], ["ぼ", "bo"],
-    ["ぱ", "pa"], ["ぴ", "pi"], ["ぷ", "pu"], ["ぺ", "pe"], ["ぽ", "po"],
+    ["あ", "a", "ア"], ["い", "i", "イ"], ["う", "u", "ウ"], ["え", "e", "エ"], ["お", "o", "オ"],
+    ["か", "ka", "カ"], ["き", "ki", "キ"], ["く", "ku", "ク"], ["け", "ke", "ケ"], ["こ", "ko", "コ"],
+    ["さ", "sa", "サ"], ["し", "shi", "シ"], ["す", "su", "ス"], ["せ", "se", "セ"], ["そ", "so", "ソ"],
+    ["た", "ta", "タ"], ["ち", "chi", "チ"], ["つ", "tsu", "ツ"], ["て", "te", "テ"], ["と", "to", "ト"],
+    ["な", "na", "ナ"], ["に", "ni", "ニ"], ["ぬ", "nu", "ヌ"], ["ね", "ne", "ネ"], ["の", "no", "ノ"],
+    ["は", "ha", "ハ"], ["ひ", "hi", "ヒ"], ["ふ", "fu", "フ"], ["へ", "he", "ヘ"], ["ほ", "ho", "ホ"],
+    ["ま", "ma", "マ"], ["み", "mi", "ミ"], ["む", "mu", "ム"], ["め", "me", "メ"], ["も", "mo", "モ"],
+    ["や", "ya", "ヤ"], ["ゆ", "yu", "ユ"], ["よ", "yo", "ヨ"],
+    ["ら", "ra", "ラ"], ["り", "ri", "リ"], ["る", "ru", "ル"], ["れ", "re", "レ"], ["ろ", "ro", "ロ"],
+    ["わ", "wa", "ワ"], ["を", "wo", "ヲ"], ["ん", "n", "ン"],
+    ["が", "ga", "ガ"], ["ぎ", "gi", "ギ"], ["ぐ", "gu", "グ"], ["げ", "ge", "ゲ"], ["ご", "go", "ゴ"],
+    ["ざ", "za", "ザ"], ["じ", "ji", "ジ"], ["ず", "zu", "ズ"], ["ぜ", "ze", "ゼ"], ["ぞ", "zo", "ゾ"],
+    ["だ", "da", "ダ"], ["ぢ", "ji", "ヂ"], ["づ", "zu", "ヅ"], ["で", "de", "デ"], ["ど", "do", "ド"],
+    ["ば", "ba", "バ"], ["び", "bi", "ビ"], ["ぶ", "bu", "ブ"], ["べ", "be", "ベ"], ["ぼ", "bo", "ボ"],
+    ["ぱ", "pa", "パ"], ["ぴ", "pi", "ピ"], ["ぷ", "pu", "プ"], ["ぺ", "pe", "ペ"], ["ぽ", "po", "ポ"],
   ];
 
   // ---------------------------------------------------------------------
@@ -209,8 +213,8 @@
         id: "seed-hiragana-" + now + "-" + i,
         front: c[0],
         romaji: c[1],
-        back: c[1],
-        tags: ["Basic Hiragana"],
+        back: c[2],
+        tags: ["Basic Hiragana & Katakana"],
         kana: c[0],
         furigana: "",
         stability: null,

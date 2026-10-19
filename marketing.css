@@ -239,11 +239,26 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .hero-mock-wrap { position: relative; width: 100%; max-width: 620px; aspect-ratio: 610 / 365; margin: 0 auto; }
 .hero-mock-wrap .browser-frame { position: absolute; left: 0; top: 12.9%; width: 75.4%; height: 87.1%; max-width: none; }
 .hero-mock-wrap .phone-frame { position: absolute; left: 73%; bottom: 0; width: 27%; height: 94.2%; max-width: none; aspect-ratio: auto; box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.06); }
-.hero-channels { margin-top: 32px; }
-.hero-channels p { font-size: 14.5px; color: var(--muted); margin: 0 0 18px; }
+@media (max-width: 760px) {
+  /* The 610:365 aspect ratio was tuned for the desktop layered
+     composition (browser + phone side by side) — at mobile's much
+     narrower width, that same ratio produces too little absolute
+     height for even the simplified mockup content, so the bottom
+     (play-audio, the hint, the action buttons) was getting clipped by
+     .browser-frame's overflow: hidden. Mobile drops the phone overlay
+     entirely (matches mobile_design/, which only shows the browser
+     mockup on its own here) and lets the browser frame size itself
+     normally instead of being absolutely positioned against a fixed
+     ratio box. */
+  .hero-mock-wrap { aspect-ratio: auto; max-width: none; }
+  .hero-mock-wrap .phone-frame { display: none; }
+  .hero-mock-wrap .browser-frame { position: static; width: 100%; height: auto; }
+}
+.hero-channels { margin-top: 32px; text-align: center; }
+.hero-channels p { font-size: 14.5px; color: var(--muted); margin: 18px 0 0; }
 .hero-channel-ctas .dark-btn, .hero-channel-ctas .cta-big { padding: 16px 28px; font-size: 16px; gap: 10px; margin-top: 0; }
 .hero-channel-ctas svg { width: 18px; height: 18px; }
-.hero-channel-ctas { display: flex; gap: 10px; flex-wrap: wrap; }
+.hero-channel-ctas { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
 
 /* ---------------------------------------------------------------------
    Dark Community showcase
@@ -271,6 +286,11 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
   .tag-grid { display: flex; grid-template-columns: none; overflow-x: auto; margin: 0 -24px; padding: 0 24px 4px; scrollbar-width: none; }
   .tag-grid::-webkit-scrollbar { display: none; }
   .tag-card { flex: 0 0 240px; }
+  /* Same scroll-strip treatment for the hero's "Built for" chips, also
+     per mobile_design/, instead of wrapping to several rows. */
+  .hero .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -24px; padding: 0 24px 4px; scrollbar-width: none; }
+  .hero .chips::-webkit-scrollbar { display: none; }
+  .hero .chip { flex: none; }
 }
 
 /* ---------------------------------------------------------------------
@@ -404,11 +424,19 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    the chrome bar, the current card's progress, and the review card
    itself. Matches both the hero's always-tiny instance and the product
    page's version once it's squeezed onto a phone viewport. */
-@container (max-width: 480px) {
-  .webmock-nav, .webmock-side { display: none; }
-  .webmock-body { grid-template-columns: 1fr; }
-  .webmock-meta { flex-wrap: wrap; row-gap: 6px; }
-  .webmock-meta .bar { order: 3; flex-basis: 100%; margin: 4px 0 0; }
+/* Nested inside a real-viewport media query, not just the container
+   query alone — the hero's browser-frame is always narrow (<=467px) by
+   design, even on desktop, so a container-query-only rule fired there
+   too and hid its nav/sidebar on desktop, which wasn't wanted (the
+   detailed mockup should still show there). This only simplifies the
+   mockup when the page itself is actually mobile width. */
+@media (max-width: 760px) {
+  @container (max-width: 480px) {
+    .webmock-nav, .webmock-side { display: none; }
+    .webmock-body { grid-template-columns: 1fr; }
+    .webmock-meta { flex-wrap: wrap; row-gap: 6px; }
+    .webmock-meta .bar { order: 3; flex-basis: 100%; margin: 4px 0 0; }
+  }
 }
 
 /* Compact override for the hero's much smaller layered mockup — the
@@ -422,7 +450,18 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
    browser-frame is always <=467px (75.4% of a 620px max-width wrap), so
    the @container rule above that hides both entirely always applies;
    overriding their now-invisible internals would be dead CSS. */
-.hero-mock-wrap .webmock-body { gap: 14px; }
+.hero-mock-wrap .webmock-nav { gap: 16px; padding-bottom: 10px; margin-bottom: 10px; }
+.hero-mock-wrap .webmock-nav .brand-mini { gap: 7px; }
+.hero-mock-wrap .webmock-nav .brand-mini span { font-size: 8.5px; }
+.hero-mock-wrap .webmock-tabs { gap: 14px; font-size: 11.5px; }
+.hero-mock-wrap .webmock-nav .newcard { font-size: 10.5px; padding: 5px 10px; }
+.hero-mock-wrap .webmock-nav .avatar { width: 20px; height: 20px; font-size: 8px; }
+.hero-mock-wrap .webmock-body { gap: 14px; grid-template-columns: .85fr 1.5fr; }
+.hero-mock-wrap .webmock-side .lbl { font-size: 9px; margin-bottom: 6px; }
+.hero-mock-wrap .webmock-side .row { padding: 7px 8px; font-size: 10.5px; margin-bottom: 2px; }
+.hero-mock-wrap .webmock-side .keys { margin-top: 20px; }
+.hero-mock-wrap .webmock-side .keys-row { gap: 6px; margin-bottom: 4px; font-size: 10px; }
+.hero-mock-wrap .webmock-side .key { padding: 3px 7px; font-size: 9.5px; }
 .hero-mock-wrap .webmock-meta { margin-bottom: 8px; font-size: 10.5px; }
 .hero-mock-wrap .webmock-meta .bar { margin: 0 10px; }
 .hero-mock-wrap .webmock-card { padding: 18px; min-height: 140px; gap: 6px; }
@@ -430,6 +469,22 @@ h1, h2 { font-family: var(--serif); letter-spacing: -.3px; margin: 0; }
 .hero-mock-wrap .webmock-card .romaji { font-size: 10.5px; }
 .hero-mock-wrap .webmock-card .play-pill { margin-top: 6px; font-size: 10px; padding: 5px 10px; }
 .hero-mock-wrap .webmock-card .hint { bottom: 8px; font-size: 9px; }
+@media (max-width: 760px) {
+  /* Placed after the base hero-card rules above (same specificity, so
+     source order decides) so this actually wins — the cramped padding/
+     min-height above was tuned for the tiny layered-composition box,
+     not the full-width mobile treatment, and left too little room
+     between the card's content and the absolutely-positioned hint,
+     overlapping them. */
+  .hero-mock-wrap .webmock-card { padding: 20px; min-height: 180px; gap: 8px; }
+  /* "Press space to see the answer" is a keyboard hint — doesn't apply
+     on an actual touch device, and was also overlapping the card's
+     centered content once the Japanese text wrapped to multiple lines
+     at this width (it's positioned absolutely and doesn't reserve
+     space, so it collided with whatever the flex content centered
+     near). Simplest correct fix is to just not show it here. */
+  .hero-mock-wrap .webmock-card .hint { display: none; }
+}
 .hero-mock-wrap .webmock-actions { gap: 8px; margin-top: 10px; }
 .hero-mock-wrap .webmock-actions span { gap: 6px; padding: 9px; font-size: 11px; }
 
